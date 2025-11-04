@@ -1,54 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<title>three.js - pointerlock controls</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link type="text/css" rel="stylesheet" href="main.css">
-		<style>
-			#blocker {
-				position: absolute;
-				width: 100%;
-				height: 100%;
-				background-color: rgba(0,0,0,0.5);
-			}
+    <head>
+        <title>three.js - pointerlock controls</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <link type="text/css" rel="stylesheet" href="main.css">
+        <style>
+            /* Estilos para a tela de bloqueio */
+            #blocker {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0,0,0,0.5);
+            }
 
-			#instructions {
-				width: 100%;
-				height: 100%;
+            #instructions {
+                width: 100%;
+                height: 100%;
 
-				display: flex;
-				flex-direction: column;
-				justify-content: center;
-				align-items: center;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
 
-				text-align: center;
-				font-size: 14px;
-				cursor: pointer;
-			}
-		</style>
-	</head>
-	<body>
-		<div id="blocker">
-			<div id="instructions">
-				<p style="font-size:36px">
-					Click to play
-				</p>
-				<p>
-					Move: WASD<br/>
-					Jump: SPACE<br/>
-					Look: MOUSE
-				</p>
-			</div>
-		</div>
+                text-align: center;
+                font-size: 14px;
+                cursor: pointer;
+            }
 
-		<script type="importmap">
-			{
-				"imports": {
-					"three": "../build/three.module.js",
-					"three/addons/": "./jsm/"
-				}
-			}
-		</script>
- <script  type="module" src="main.js"></script>
+            /* === NOVO ESTILO PARA O PLACAR === */
+            #scoreContainer {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                color: #ffffff; /* Cor branca para o texto */
+                font-family: sans-serif;
+                font-size: 24px;
+                text-shadow: 2px 2px 4px #000000; /* Sombra para legibilidade */
+                z-index: 1000; /* Garante que fique acima da cena 3D */
+            }
+            /* ================================== */
+        </style>
+    </head>
+    <body>
+        <div id="blocker">
+            <div id="instructions">
+                <p style="font-size:36px">
+                    Click to play
+                </p>
+                <p>
+                    Move: WASD<br/>
+                    Jump: SPACE<br/>
+                    Look: MOUSE
+                </p>
+            </div>
+        </div>
+
+        <div id="scoreContainer">
+            Pontuação: <span id="scoreValue">0</span>
+        </div>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "../build/three.module.js",
+                    "three/addons/": "./jsm/"
+                }
+            }
+        </script>
+        <script type="module" src="main.js"></script>
+    </body>
 </html>

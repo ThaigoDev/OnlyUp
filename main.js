@@ -2,14 +2,15 @@ import * as THREE from 'three';
 
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-// Nao e necessario importar TextureLoader explicitamente pois ja está em THREE
-// import { TextureLoader } from 'three'; 
+import { ScoreManager } from './pontuacao.js'; // Ajuste o caminho se necessário
 
 let camera, scene, renderer, controls;
 
 const objects = [];
 
 let raycaster;
+
+let scoreManager;
 
 let moveForward = false;
 let moveBackward = false;
@@ -22,6 +23,9 @@ const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 const vertex = new THREE.Vector3();
 const color = new THREE.Color();
+
+// === NOVA VARIÁVEL GLOBAL ===
+let maxAltitudeScore = 0; // Armazena a maior altura (y) já alcançada
 
 init();
 
@@ -42,6 +46,8 @@ function init() {
 
 	const blocker = document.getElementById('blocker');
 	const instructions = document.getElementById('instructions');
+
+	scoreManager = new ScoreManager('scoreValue');
 
 	instructions.addEventListener('click', function () {
 
@@ -171,7 +177,7 @@ function init() {
 	const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 	scene.add(floor);
 
-	
+
 
 	floorGeometry = floorGeometry.toNonIndexed(); // ensure each face has unique vertices
 
@@ -189,7 +195,7 @@ function init() {
 
 	// objects
 
-	const boxGeometry = new THREE.BoxGeometry(20, 20, 20).toNonIndexed();
+	const boxGeometry = new THREE.BoxGeometry(15, 15, 15).toNonIndexed();
 
 	// --- CRIAÇÃO DOS MATERIAIS MULTI-FACE ---
 	// Usaremos MeshBasicMaterial pois a cena já tem uma HemisphericLight
@@ -206,17 +212,9 @@ function init() {
 		sideMaterial,   // Face 4: Lateral +Z
 		sideMaterial    // Face 5: Lateral -Z
 	];
-	// --- FIM DA CRIAÇÃO DOS MATERIAIS ---
-
-	// Este trecho que lidava com cores de vértice agora é desnecessário ou incorreto com texturas:
-	// position = boxGeometry.attributes.position;
-	// const colorsBox = [];
-	// boxGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colorsBox, 3));
-
 
 	for (let i = 0; i < 500; i++) {
 
-		// Use o array de materiais no Mesh
 		const box = new THREE.Mesh(boxGeometry, multiMaterial);
 
 		box.position.x = Math.floor(Math.random() * 20 - 10) * 20;
@@ -228,18 +226,13 @@ function init() {
 
 	}
 
-	//
-
 	renderer = new THREE.WebGLRenderer({ antialias: true });
 	renderer.setPixelRatio(window.devicePixelRatio);
 	renderer.setSize(window.innerWidth, window.innerHeight);
 	renderer.setAnimationLoop(animate);
 	document.body.appendChild(renderer.domElement);
 
-	//
-
 	window.addEventListener('resize', onWindowResize);
-
 }
 
 function onWindowResize() {
@@ -253,54 +246,74 @@ function onWindowResize() {
 
 function animate() {
 
-	const time = performance.now();
+    const time = performance.now();
+    const delta = (time - prevTime) / 1000;
 
-	if (controls.isLocked === true) {
+    if (controls.isLocked === true) {
 
-		raycaster.ray.origin.copy(controls.object.position);
-		raycaster.ray.origin.y -= 10;
+        // ... (Seu código de raycaster e física de movimento/gravidade permanece aqui) ...
 
-		const intersections = raycaster.intersectObjects(objects, false);
+        raycaster.ray.origin.copy(controls.object.position);
+        raycaster.ray.origin.y -= 10;
 
-		const onObject = intersections.length > 0;
+        const intersections = raycaster.intersectObjects(objects, false);
 
-		const delta = (time - prevTime) / 1000;
+        const onObject = intersections.length > 0;
+        // ... (demais cálculos de delta, velocidade, direção, etc.) ...
+        
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
 
-		velocity.x -= velocity.x * 10.0 * delta;
-		velocity.z -= velocity.z * 10.0 * delta;
+        velocity.y -= 9.8 * 100.0 * delta;
 
-		velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.normalize();
 
-		direction.z = Number(moveForward) - Number(moveBackward);
-		direction.x = Number(moveRight) - Number(moveLeft);
-		direction.normalize(); // this ensures consistent movements in all directions
+        if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+        if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
 
-		if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-		if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+        if (onObject === true) {
 
-		if (onObject === true) {
+            velocity.y = Math.max(0, velocity.y);
+            canJump = true;
 
-			velocity.y = Math.max(0, velocity.y);
-			canJump = true;
+        }
 
-		}
+        controls.moveRight(- velocity.x * delta);
+        controls.moveForward(- velocity.z * delta);
 
-		controls.moveRight(- velocity.x * delta);
-		controls.moveForward(- velocity.z * delta);
+        controls.object.position.y += (velocity.y * delta); // new behavior
 
-		controls.object.position.y += (velocity.y * delta); // new behavior
+        if (controls.object.position.y < 10) {
 
-		if (controls.object.position.y < 10) {
+            velocity.y = 0;
+            controls.object.position.y = 10;
 
-			velocity.y = 0;
-			controls.object.position.y = 10;
+            canJump = true;
 
-			canJump = true;
+        }
+        
+        // === NOVO CÓDIGO: LÓGICA DE RECORD DE ALTURA ===
+        const currentHeight = controls.object.position.y;
+        
+        // 1. Verifica se a altura atual é maior que o recorde anterior (maxAltitudeScore)
+        // E garante que a altura seja significativa (por exemplo, maior que o nível do chão, que é 10)
+        if (currentHeight > maxAltitudeScore && currentHeight > 10) {
+            
+            // 2. Atualiza o recorde de altura
+            maxAltitudeScore = currentHeight;
+            
+            // 3. Define a pontuação do jogo para ser igual à altura máxima alcançada.
+            // Arredondamos para um número inteiro para ser um placar limpo.
+            scoreManager.setScore(Math.floor(maxAltitudeScore - 10)); 
+            // Subtraímos 10 para a pontuação começar em 0 na altura do chão.
+        }
+        // ===============================================
 
-		}
-	}
-	prevTime = time;
+    }
+    prevTime = time;
 
-	renderer.render(scene, camera);
+    renderer.render(scene, camera);
 
 }
