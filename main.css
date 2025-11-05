@@ -1,4 +1,3 @@
-/* === ESTILOS DE BASE (CORRIGINDO A BARRA BRANCA) === */
 body {
     margin: 0; /* Remove a barra branca */
     background-color: #000;
@@ -13,8 +12,6 @@ body {
 canvas {
     display: block;
 }
-
-/* === ESTILOS DA INTERFACE (UI) === */
 
 /* Estilos para a tela de bloqueio */
 #blocker {
@@ -114,7 +111,7 @@ canvas {
 }
 
 #rankingList {
-    list-style-type: decimal;
+    list-style-type: decimal; /* Isso coloca os números "1." "2." */
     padding-left: 40px;
     text-align: left;
 }
