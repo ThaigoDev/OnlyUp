@@ -6,7 +6,7 @@ const objects = [];
 const movingObjects = []; // Array para blocos que se movem
 let raycaster; // Nosso único raycaster, usado para o chão
 let scoreElement; 
-let skyboxMesh; // <-- RE-ADICIONADO: Variável global para o céu
+let skyboxMesh; // Variável global para o céu
 
 let moveForward = false;
 let moveBackward = false;
@@ -19,8 +19,7 @@ const MAX_JUMPS = 2; // Define o número máximo de pulos (1 = pulo normal, 2 = 
 let prevTime = performance.now();
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
-const vertex = new THREE.Vector3();
-const color = new THREE.Color();
+
 
 // === NOVAS VARIÁVEIS GLOBAIS ===
 let maxAltitudeScore = 0;
@@ -37,10 +36,10 @@ let timerElement;
 let finalScore = 0;
 let playerName = 'Jogador'; // Nome padrão
 
-// === VARIÁVEL DE ALTURA DO JOGADOR ===
+//  VARIÁVEL DE ALTURA DO JOGADOR
 const playerHeight = 10.0; // Altura do "pé" do jogador em relação à câmera
 
-// === NOVAS VARIÁVEIS DE ÁUDIO ===
+// NOVAS VARIÁVEIS DE ÁUDIO 
 let audioListener, backgroundMusic, jumpSound;
 let audioLoader;
 
@@ -52,7 +51,7 @@ function init() {
 
     scene = new THREE.Scene();
 
-    // === MUDANÇA: CÉU AZUL COM NUVENS (DE VOLTA!) ===
+    // CÉU AZUL COM NUVENS 
     const cubeTextureLoader = new THREE.CubeTextureLoader();
     // Links estáveis do three.js para um céu azul
     const textureCube = cubeTextureLoader.load([
@@ -71,17 +70,17 @@ function init() {
     skyboxMesh = new THREE.Mesh(skyboxGeo, skyboxMat);
     scene.add(skyboxMesh);
     
-    // === MUDANÇA: NÉVOA DE CÉU CLARO ===
-    scene.fog = new THREE.Fog(0xa0c4ff, 0, 750); // Cor da névoa (azul claro)
+    //  MUDANÇA: NÉVOA DE CÉU CLARO 
+    scene.fog = new THREE.Fog(0xa0c4ff, 0,950); // Cor da névoa (azul claro)
 
-    // === MUDANÇA: LUZ DIURNA ===
+    //  MUDANÇA: LUZ DIURNA 
     const light = new THREE.HemisphereLight(0xffffff, 0x888888, 2.0); // Luz branca de cima, cinza de baixo
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
 
     controls = new PointerLockControls(camera, document.body);
 
-    // === INICIALIZAÇÃO DE ÁUDIO ===
+    //  INICIALIZAÇÃO DE ÁUDIO 
     audioListener = new THREE.AudioListener();
     camera.add(audioListener); // Adiciona o "ouvido" à câmera
     backgroundMusic = new THREE.Audio(audioListener);
@@ -103,7 +102,7 @@ function init() {
     });
     // =============================
 
-    // === BUSCA DE ELEMENTOS DA UI ===
+    //  BUSCA DE ELEMENTOS DA UI 
     const blocker = document.getElementById('blocker');
     const instructions = document.getElementById('instructions');
     const pauseScreen = document.getElementById('pauseScreen');
@@ -112,11 +111,12 @@ function init() {
     scoreElement = document.getElementById('scoreValue'); 
     timerElement = document.getElementById('timerValue');
 
-    // === LISTENERS DOS BOTÕES DA UI ===
+    //  LISTENERS DOS BOTÕES DA UI 
     document.getElementById('playButton').addEventListener('click', () => {
         const nameInput = document.getElementById('playerNameInput');
         if (nameInput.value.trim() !== '') {
-            playerName = nameInput.value.trim();
+            playerName = nameInput.value.trim(); 
+            console.log(playerName)
         } else {
             playerName = 'Jogador';
         }
@@ -155,7 +155,7 @@ function init() {
         }
     });
 
-    // === LISTENERS DO CONTROLE (LOCK/UNLOCK) ===
+    //  LISTENERS DO CONTROLE (LOCK/UNLOCK)
     controls.addEventListener('lock', function () {
         blocker.style.display = 'none';
         instructions.style.display = 'none';
@@ -189,7 +189,7 @@ function init() {
 
     scene.add(controls.object);
 
-    // === KEYDOWN / KEYUP ===
+    //  KEYDOWN / KEYUP 
     const onKeyDown = function (event) {
         switch (event.code) {
             case 'ArrowUp':
@@ -247,13 +247,13 @@ function init() {
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
 
-    // === RAYCASTER ===
+    //  RAYCASTER 
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, playerHeight + 0.1);
 
-    // --- TEXTURAS ---
+    //  TEXTURAS
     const textureLoader = new THREE.TextureLoader();
     
-    // === MUDANÇA: TEXTURA DO CHÃO MINECRAFT (DE VOLTA!) ===
+    //  TEXTURA DO CHÃO MINECRAFT 
     const floorTexture = textureLoader.load('img/minecraftTop.png'); // Sua textura original
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
@@ -267,7 +267,7 @@ function init() {
     const bottomTexture = textureLoader.load('img/minecraftBot.png');
     bottomTexture.magFilter = THREE.NearestFilter; 
 
-    // --- CHÃO MINECRAFT ---
+    //  CHÃO MINECRAFT 
     let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
     floorGeometry.rotateX(-Math.PI / 2);
 
@@ -277,7 +277,7 @@ function init() {
     objects.push(floor); 
 
     
-    // --- OBJETOS (BLOCOS, CILINDROS, ESFERAS) ---
+    //  OBJETOS (BLOCOS, CILINDROS, ESFERAS)
     const sideMaterial = new THREE.MeshBasicMaterial({ 
         map: sideTexture, 
         color: 0xbb8866 
@@ -300,27 +300,40 @@ function init() {
         cylinderGeometry,
         sphereGeometry
     ];
-    // Materiais
+
+    //  MUDANÇA: MATERIAIS COM TEXTURA PARA CILINDRO E ESFERA
     const boxMaterial = [sideMaterial, sideMaterial, topMaterial, bottomMaterial, sideMaterial, sideMaterial];
-    const cylinderMaterial = new THREE.MeshBasicMaterial({ color: 0x8888ff }); 
-    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff8888 }); 
+    
+    // Material do Cilindro (textura lateral azulada, textura do topo azulada)
+    const cylinderSideMaterial = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }); // Azul
+    const cylinderTopMaterial = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }); // Azul
+    const cylinderMaterial = [cylinderSideMaterial, cylinderTopMaterial, cylinderTopMaterial]; // Lados, Topo, Base
+    
+    // Material da Esfera (textura do topo avermelhada)
+    const sphereMaterial = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 }); // Vermelho
+
     const materials = [
         boxMaterial, boxMaterial, boxMaterial,
         cylinderMaterial,
         sphereMaterial
     ];
+    
 
     for (let i = 0; i < 1000; i++) {
         const shapeIndex = Math.floor(Math.random() * geometries.length);
+        
         const mesh = new THREE.Mesh(geometries[shapeIndex], materials[shapeIndex]);
+        
         mesh.position.x = Math.floor(Math.random() * 30 - 15) * 12;
         const baseY = Math.floor(Math.random() * 30) * 20 + 10;
         
+        // Ajusta a altura da base. O centro do Box/Cilindro é +5, Esfera é +6
         if (geometries[shapeIndex] === sphereGeometry) {
              mesh.position.y = baseY + 6;
         } else {
              mesh.position.y = baseY + 5;
         }
+        
         mesh.position.z = Math.floor(Math.random() * 30 - 15) * 12;
         scene.add(mesh);
         objects.push(mesh); 
@@ -333,14 +346,14 @@ function init() {
         }
     }
 
-    // --- BLOCO DE VITÓRIA ---
+    // BLOCO DE VITÓRIA 
     const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
     const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
     const victoryBox = new THREE.Mesh(victoryGeometry, victoryMaterial);
     victoryBox.position.set(0, WIN_HEIGHT + 2.5, 0);
     scene.add(victoryBox);
    
-    // --- RENDERIZADOR ---
+    //  RENDERIZADOR
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -357,7 +370,7 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// === FUNÇÃO DE RESPAWN ===
+// FUNÇÃO DE RESPAWN
 function respawnPlayer() {
     controls.object.position.set(0, playerHeight, 0); 
     velocity.set(0, 0, 0);
@@ -365,7 +378,7 @@ function respawnPlayer() {
 }
 
 
-// === FUNÇÕES DE ESTADO DE JOGO ===
+// FUNÇÕES DE ESTADO DE JOGO 
 function startGame() {
     gameActive = true;
     isPaused = false; 
@@ -498,7 +511,7 @@ function resetRanking() {
     showRanking();
 }
 
-// === FUNÇÃO DE ANIMAÇÃO ===
+// FUNÇÃO DE ANIMAÇÃO 
 function animate() {
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
@@ -513,7 +526,7 @@ function animate() {
             obj.deltaX = newX - oldX; 
         }
 
-        // === MUDANÇA: ROTAÇÃO DO SKYBOX
+        // ROTAÇÃO DO SKYBOX
         if (skyboxMesh) {
             skyboxMesh.rotation.y += 0.005 * delta; // Gira as nuvens lentamente
         }
