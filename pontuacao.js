@@ -14,7 +14,7 @@ export class ScoreManager {
 
      * @param {number} points - O número de pontos a adicionar.
      */
-   addPoints(points) {
+    addPoints(points) {
         // Remova a verificação `points <= 0` se quiser permitir subtração de pontos.
         if (typeof points !== 'number') {
             console.warn("Tentativa de adicionar pontuação inválida.");
@@ -30,16 +30,13 @@ export class ScoreManager {
      */
     setScore(newScore) {
         this.score = newScore;
-         if (this.score >= 450){
-            this.score = 450;
-        }
         this.updateDisplay();
     }
 
-  updateDisplay() {
+    updateDisplay() {
         if (this.scoreElement) {
             // Garante que o placar exiba um número inteiro.
-            this.scoreElement.textContent = Math.floor(this.score).toString(); 
+            this.scoreElement.textContent = Math.floor(this.score).toString();
         }
     }
 
