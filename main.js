@@ -16,12 +16,11 @@ let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
 let moveRight = false;
-let canJump = false;
+let canJump = true;
 
 let prevTime = performance.now();
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
-const vertex = new THREE.Vector3();
 const color = new THREE.Color();
 
 // === NOVA VARIÁVEL GLOBAL ===
@@ -96,8 +95,11 @@ function init() {
 				break;
 
 			case 'Space':
-				if (canJump === true) velocity.y += 350;
-				canJump = false;
+				if (canJump === true) {
+					canJump = false;
+					velocity.y += 350;
+
+				}
 				break;
 
 		}
@@ -203,14 +205,13 @@ function init() {
 	const topMaterial = new THREE.MeshBasicMaterial({ map: topTexture });
 	const bottomMaterial = new THREE.MeshBasicMaterial({ map: bottomTexture });
 
-	// ORDEM DA BOX GEOMETRY: [X+, X-, Y+, Y-, Z+, Z-]
 	const multiMaterial = [
-		sideMaterial,   // Face 0: Lateral +X
-		sideMaterial,   // Face 1: Lateral -X
-		topMaterial,    // Face 2: Topo +Y 
-		bottomMaterial, // Face 3: Base -Y 
-		sideMaterial,   // Face 4: Lateral +Z
-		sideMaterial    // Face 5: Lateral -Z
+		sideMaterial,
+		sideMaterial,
+		topMaterial,
+		bottomMaterial,
+		sideMaterial,
+		sideMaterial
 	];
 
 	for (let i = 0; i < 500; i++) {
@@ -246,74 +247,66 @@ function onWindowResize() {
 
 function animate() {
 
-    const time = performance.now();
-    const delta = (time - prevTime) / 1000;
+	const time = performance.now();
+	const delta = (time - prevTime) / 1000;
 
-    if (controls.isLocked === true) {
+	if (controls.isLocked === true) {
 
-        // ... (Seu código de raycaster e física de movimento/gravidade permanece aqui) ...
+		// ... (Seu código de raycaster e física de movimento/gravidade permanece aqui) ...
 
-        raycaster.ray.origin.copy(controls.object.position);
-        raycaster.ray.origin.y -= 10;
+		raycaster.ray.origin.copy(controls.object.position);
+		raycaster.ray.origin.y -= 10;
 
-        const intersections = raycaster.intersectObjects(objects, false);
+		const intersections = raycaster.intersectObjects(objects, false);
 
-        const onObject = intersections.length > 0;
-        // ... (demais cálculos de delta, velocidade, direção, etc.) ...
-        
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
+		const onObject = intersections.length > 0;
+		// ... (demais cálculos de delta, velocidade, direção, etc.) ...
 
-        velocity.y -= 9.8 * 100.0 * delta;
+		velocity.x -= velocity.x * 10.0 * delta;
+		velocity.z -= velocity.z * 10.0 * delta;
 
-        direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize();
+		velocity.y -= 9.8 * 100.0 * delta;
 
-        if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-        if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+		direction.z = Number(moveForward) - Number(moveBackward);
+		direction.x = Number(moveRight) - Number(moveLeft);
+		direction.normalize();
 
-        if (onObject === true) {
+		if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+		if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
 
-            velocity.y = Math.max(0, velocity.y);
-            canJump = true;
+		if (onObject === true) {
 
-        }
+			velocity.y = Math.max(0, velocity.y);
+			canJump = true;
 
-        controls.moveRight(- velocity.x * delta);
-        controls.moveForward(- velocity.z * delta);
+		}
 
-        controls.object.position.y += (velocity.y * delta); // new behavior
+		controls.moveRight(- velocity.x * delta);
+		controls.moveForward(- velocity.z * delta);
 
-        if (controls.object.position.y < 10) {
+		controls.object.position.y += (velocity.y * delta); // new behavior
 
-            velocity.y = 0;
-            controls.object.position.y = 10;
+		if (controls.object.position.y < 10) {
 
-            canJump = true;
+			velocity.y = 0;
+			controls.object.position.y = 10;
 
-        }
-        
-        // === NOVO CÓDIGO: LÓGICA DE RECORD DE ALTURA ===
-        const currentHeight = controls.object.position.y;
-        
-        // 1. Verifica se a altura atual é maior que o recorde anterior (maxAltitudeScore)
-        // E garante que a altura seja significativa (por exemplo, maior que o nível do chão, que é 10)
-        if (currentHeight > maxAltitudeScore && currentHeight > 10) {
-            
-            // 2. Atualiza o recorde de altura
-            maxAltitudeScore = currentHeight;
-            
-            // 3. Define a pontuação do jogo para ser igual à altura máxima alcançada.
-            // Arredondamos para um número inteiro para ser um placar limpo.
-            scoreManager.setScore(Math.floor(maxAltitudeScore - 10)); 
-            // Subtraímos 10 para a pontuação começar em 0 na altura do chão.
-        }
-        // ===============================================
+			canJump = true;
 
-    }
-    prevTime = time;
+		}
 
-    renderer.render(scene, camera);
+		const currentHeight = controls.object.position.y;
+
+		if (currentHeight > maxAltitudeScore && currentHeight > 10) {
+
+			maxAltitudeScore = currentHeight;
+
+			scoreManager.setScore(Math.floor(maxAltitudeScore - 10));
+		}
+
+	}
+	prevTime = time;
+
+	renderer.render(scene, camera);
 
 }
