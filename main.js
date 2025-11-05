@@ -35,6 +35,13 @@ let timerElement;
 let finalScore = 0;
 let playerName = 'Jogador'; // Nome padrão
 
+// === VARIÁVEIS DE ÁUDIO (ADIÇÃO 1) ===
+let audioListener;
+let soundLoader;
+let jumpSound; // Para som1
+let finalSound; // Para final
+// ===================================
+
 // === VARIÁVEL DE ALTURA DO JOGADOR ===
 const playerHeight = 10.0; // Altura do "pé" do jogador em relação à câmera
 
@@ -152,9 +159,16 @@ function init() {
                 if (jumpCount > 0) {
                     // Define a velocidade vertical para 250 (ignora a velocidade atual)
                     // Isso garante que o pulo duplo tenha a mesma força
-                    velocity.y = 250;
+                    velocity.y = 1000;
                     // Gasta um pulo
                     jumpCount--;
+
+                    // === ADIÇÃO 3: TOCA O SOM DE PULO ===
+                    if (jumpSound.buffer) {
+                        jumpSound.stop();
+                        jumpSound.play(); 
+                    }
+                    // =====================================
                 }
                 break;
         }
@@ -235,6 +249,30 @@ function init() {
     scene.add(victoryBox);
     // (Não precisa de colisão com o bloco de vitória, só de detectar a altura Y)
 
+    // === CONFIGURAÇÃO DE ÁUDIO  ===
+    audioListener = new THREE.AudioListener();
+    camera.add(audioListener); // Adiciona o listener à câmera para que ela "ouça"
+    soundLoader = new THREE.AudioLoader();
+
+    // Carrega o som de PULO (som1)
+    jumpSound = new THREE.Audio(audioListener);
+    // O caminho foi corrigido para 'audio/som1.mp3'
+    soundLoader.load('audio/som1.mp3', function (buffer) { 
+        jumpSound.setBuffer(buffer);
+        jumpSound.setLoop(false);
+        jumpSound.setVolume(0.5); 
+    });
+
+    // Carrega o som de FINAL/VITÓRIA (final)
+    finalSound = new THREE.Audio(audioListener);
+    // O caminho foi corrigido para 'audio/final.mp3'
+    soundLoader.load('audio/final.mp3', function (buffer) { 
+        finalSound.setBuffer(buffer);
+        finalSound.setLoop(false);
+        finalSound.setVolume(0.7); 
+    });
+    // ===============================================================
+
     // --- RENDERIZADOR ---
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -306,6 +344,12 @@ function gameWon() {
     document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo Restante: ${timerElement.textContent}`;
     document.getElementById('gameOverScreen').style.display = 'flex';
     showRanking();
+
+    // === ADIÇÃO 4: TOCA O SOM DE VITÓRIA/FINAL ===
+    if (finalSound.buffer) {
+        finalSound.play();
+    }
+    // ===========================================
 }
 // === FUNÇÕES DE RANKING (Sem alterações) ===
 function saveScore(score, isWin = false) {
@@ -414,4 +458,4 @@ function animate() {
 
     prevTime = time;
     renderer.render(scene, camera);
-}	
+}
