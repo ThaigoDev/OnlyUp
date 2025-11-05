@@ -1,22 +1,21 @@
 import * as THREE from 'three';
-
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-
-import { ScoreManager } from './pontuacao.js'; // Ajuste o caminho se necessário
+import { ScoreManager } from './pontuacao.js';
 
 let camera, scene, renderer, controls;
-
 const objects = [];
-
-let raycaster;
-
+let raycaster; // Nosso único raycaster, usado para o chão
 let scoreManager;
 
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
 let moveRight = false;
-let canJump = false;
+
+// === MUDANÇA 1: "canJump" FOI SUBSTITUÍDO POR "jumpCount" ===
+// let canJump = false; // <-- REMOVIDO
+let jumpCount = 0;
+const MAX_JUMPS = 2; // Define o número máximo de pulos (1 = pulo normal, 2 = pulo duplo)
 
 let prevTime = performance.now();
 const velocity = new THREE.Vector3();
@@ -24,296 +23,395 @@ const direction = new THREE.Vector3();
 const vertex = new THREE.Vector3();
 const color = new THREE.Color();
 
-// === NOVA VARIÁVEL GLOBAL ===
-let maxAltitudeScore = 0; // Armazena a maior altura (y) já alcançada
+// === NOVAS VARIÁVEIS GLOBAIS ===
+let maxAltitudeScore = 0;
+const WIN_HEIGHT = 600;
+
+// Variáveis de Estado do Jogo e Tempo
+let gameActive = false;
+let gameTime = 300;
+let timerInterval;
+let timerElement;
+let finalScore = 0;
+let playerName = 'Jogador'; // Nome padrão
+
+// === VARIÁVEL DE ALTURA DO JOGADOR ===
+const playerHeight = 10.0; // Altura do "pé" do jogador em relação à câmera
 
 init();
 
 function init() {
-
-	camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
-	camera.position.y = 10;
-
-	scene = new THREE.Scene();
-	scene.background = new THREE.Color(0xffffff);
-	scene.fog = new THREE.Fog(0xffffff, 0, 750);
-
-	const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 2.5);
-	light.position.set(0.5, 1, 0.75);
-	scene.add(light);
-
-	controls = new PointerLockControls(camera, document.body);
-
-	const blocker = document.getElementById('blocker');
-	const instructions = document.getElementById('instructions');
-
-	scoreManager = new ScoreManager('scoreValue');
-
-	instructions.addEventListener('click', function () {
-
-		controls.lock();
-
-	});
-
-	controls.addEventListener('lock', function () {
-
-		instructions.style.display = 'none';
-		blocker.style.display = 'none';
-
-	});
-
-	controls.addEventListener('unlock', function () {
-
-		blocker.style.display = 'block';
-		instructions.style.display = '';
-
-	});
-
-	scene.add(controls.object);
-
-	const onKeyDown = function (event) {
-
-		switch (event.code) {
-
-			case 'ArrowUp':
-			case 'KeyW':
-				moveForward = true;
-				break;
-
-			case 'ArrowLeft':
-			case 'KeyA':
-				moveLeft = true;
-				break;
-
-			case 'ArrowDown':
-			case 'KeyS':
-				moveBackward = true;
-				break;
-
-			case 'ArrowRight':
-			case 'KeyD':
-				moveRight = true;
-				break;
-
-			case 'Space':
-				if (canJump === true) velocity.y += 350;
-				canJump = false;
-				break;
-
-		}
-
-	};
-
-	const onKeyUp = function (event) {
-
-		switch (event.code) {
-
-			case 'ArrowUp':
-			case 'KeyW':
-				moveForward = false;
-				break;
-
-			case 'ArrowLeft':
-			case 'KeyA':
-				moveLeft = false;
-				break;
-
-			case 'ArrowDown':
-			case 'KeyS':
-				moveBackward = false;
-				break;
-
-			case 'ArrowRight':
-			case 'KeyD':
-				moveRight = false;
-				break;
-
-		}
-
-	};
-
-	document.addEventListener('keydown', onKeyDown);
-	document.addEventListener('keyup', onKeyUp);
-
-	raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 10);
-
-	// --- CARREGAMENTO DE MÚLTIPLAS TEXTURAS ---
-	// NOTA: Para um código mais robusto, use THREE.LoadingManager para garantir que a renderização só comece após o carregamento.
-	const textureLoader = new THREE.TextureLoader();
-
-	const floorTexture = textureLoader.load('img/minecraftTop.png');
-	floorTexture.wrapS = THREE.RepeatWrapping;
-	floorTexture.wrapT = THREE.RepeatWrapping;
-	floorTexture.repeat.set(500, 500);
-
-	// 1. Textura Lateral (as 4 faces laterais)
-	const sideTexture = textureLoader.load('img/minecraftTextureBlock.png');
-	sideTexture.wrapS = THREE.ClampToEdgeWrapping;
-	sideTexture.wrapT = THREE.ClampToEdgeWrapping;
-
-	// 2. Textura do Topo
-	const topTexture = textureLoader.load('img/minecraftTop.png');
-	topTexture.wrapS = THREE.ClampToEdgeWrapping;
-	topTexture.wrapT = THREE.ClampToEdgeWrapping;
-
-	// 3. Textura da Base (somente a parte de baixo)
-	const bottomTexture = textureLoader.load('img/minecraftBot.png');
-	bottomTexture.wrapS = THREE.ClampToEdgeWrapping;
-	bottomTexture.wrapT = THREE.ClampToEdgeWrapping;
-	// --- FIM DO CARREGAMENTO ---
-
-	// floor
-
-	let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
-	floorGeometry.rotateX(- Math.PI / 2);
-
-	// vertex displacement
-
-	let position = floorGeometry.attributes.position;
-
-	const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture });
-	// Agora o material usa a textura carregada
-
-	const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-	scene.add(floor);
-
-
-
-	floorGeometry = floorGeometry.toNonIndexed(); // ensure each face has unique vertices
-
-	position = floorGeometry.attributes.position;
-	const colorsFloor = [];
-
-	for (let i = 0, l = position.count; i < l; i++) {
-
-		color.setHSL(Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75, THREE.SRGBColorSpace);
-		colorsFloor.push(color.r, color.g, color.b);
-
-	}
-
-	floorGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colorsFloor, 3));
-
-	// objects
-
-	const boxGeometry = new THREE.BoxGeometry(15, 15, 15).toNonIndexed();
-
-	// --- CRIAÇÃO DOS MATERIAIS MULTI-FACE ---
-	// Usaremos MeshBasicMaterial pois a cena já tem uma HemisphericLight
-	const sideMaterial = new THREE.MeshBasicMaterial({ map: sideTexture });
-	const topMaterial = new THREE.MeshBasicMaterial({ map: topTexture });
-	const bottomMaterial = new THREE.MeshBasicMaterial({ map: bottomTexture });
-
-	// ORDEM DA BOX GEOMETRY: [X+, X-, Y+, Y-, Z+, Z-]
-	const multiMaterial = [
-		sideMaterial,   // Face 0: Lateral +X
-		sideMaterial,   // Face 1: Lateral -X
-		topMaterial,    // Face 2: Topo +Y 
-		bottomMaterial, // Face 3: Base -Y 
-		sideMaterial,   // Face 4: Lateral +Z
-		sideMaterial    // Face 5: Lateral -Z
-	];
-
-	for (let i = 0; i < 500; i++) {
-
-		const box = new THREE.Mesh(boxGeometry, multiMaterial);
-
-		box.position.x = Math.floor(Math.random() * 20 - 10) * 20;
-		box.position.y = Math.floor(Math.random() * 20) * 20 + 10;
-		box.position.z = Math.floor(Math.random() * 20 - 10) * 20;
-
-		scene.add(box);
-		objects.push(box);
-
-	}
-
-	renderer = new THREE.WebGLRenderer({ antialias: true });
-	renderer.setPixelRatio(window.devicePixelRatio);
-	renderer.setSize(window.innerWidth, window.innerHeight);
-	renderer.setAnimationLoop(animate);
-	document.body.appendChild(renderer.domElement);
-
-	window.addEventListener('resize', onWindowResize);
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+    // A câmera (olhos) começa na altura do jogador (ex: 10)
+    camera.position.y = playerHeight;
+
+    scene = new THREE.Scene();
+
+    scene.background = new THREE.Color(0x87CEEB); // Azul céu
+    scene.fog = new THREE.Fog(0x87CEEB, 0, 750); // Névoa da mesma cor do céu
+
+    const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 2.5);
+    light.position.set(0.5, 1, 0.75);
+    scene.add(light);
+
+    controls = new PointerLockControls(camera, document.body);
+
+    // === BUSCA DE ELEMENTOS DA UI ===
+    const blocker = document.getElementById('blocker');
+    const instructions = document.getElementById('instructions');
+    const pauseScreen = document.getElementById('pauseScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+
+    scoreManager = new ScoreManager('scoreValue');
+    timerElement = document.getElementById('timerValue');
+
+    // === LISTENERS DOS BOTÕES DA UI ===
+    document.getElementById('playButton').addEventListener('click', () => {
+        const nameInput = document.getElementById('playerNameInput');
+        if (nameInput.value.trim() !== '') {
+            playerName = nameInput.value.trim();
+        } else {
+            playerName = 'Jogador';
+        }
+        controls.lock();
+    });
+
+    document.getElementById('rankingButton').addEventListener('click', (e) => {
+        e.stopPropagation();
+        showRanking();
+    });
+    document.getElementById('resumeButton').addEventListener('click', () => {
+        controls.lock();
+    });
+    document.getElementById('restartButton').addEventListener('click', () => {
+        controls.lock();
+    });
+    document.getElementById('closeRanking').addEventListener('click', () => {
+        hideRanking();
+    });
+
+    document.getElementById('resetRankingButton').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('Tem certeza que deseja apagar todas as pontuações?')) {
+            resetRanking();
+        }
+    });
+
+    // === LISTENERS DO CONTROLE (LOCK/UNLOCK) ===
+    controls.addEventListener('lock', function () {
+        blocker.style.display = 'none';
+        instructions.style.display = 'none';
+        pauseScreen.style.display = 'none';
+        gameOverScreen.style.display = 'none';
+
+        if (!gameActive) {
+            startGame();
+        } else {
+            resumeGame();
+        }
+    });
+
+    controls.addEventListener('unlock', function () {
+        blocker.style.display = 'block';
+
+        if (gameActive) {
+            gameActive = false;
+            clearInterval(timerInterval);
+            pauseScreen.style.display = 'flex';
+        } else {
+            if (pauseScreen.style.display === 'none' && gameOverScreen.style.display === 'none') {
+                instructions.style.display = 'flex';
+            }
+        }
+    });
+
+    scene.add(controls.object);
+
+    const onKeyDown = function (event) {
+        switch (event.code) {
+            case 'ArrowUp':
+            case 'KeyW':
+                moveForward = true;
+                break;
+            case 'ArrowLeft':
+            case 'KeyA':
+                moveLeft = true;
+                break;
+            case 'ArrowDown':
+            case 'KeyS':
+                moveBackward = true;
+                break;
+            case 'ArrowRight':
+            case 'KeyD':
+                moveRight = true;
+                break;
+            
+            // === MUDANÇA 2: LÓGICA DE PULO ===
+            case 'Space':
+                // Se o contador de pulos for maior que 0
+                if (jumpCount > 0) {
+                    // Define a velocidade vertical para 250 (ignora a velocidade atual)
+                    // Isso garante que o pulo duplo tenha a mesma força
+                    velocity.y = 250;
+                    // Gasta um pulo
+                    jumpCount--;
+                }
+                break;
+        }
+    };
+
+    const onKeyUp = function (event) {
+        switch (event.code) {
+            case 'ArrowUp':
+            case 'KeyW':
+                moveForward = false;
+                break;
+            case 'ArrowLeft':
+            case 'KeyA':
+                moveLeft = false;
+                break;
+            case 'ArrowDown':
+            case 'KeyS':
+                moveBackward = false;
+                break;
+            case 'ArrowRight':
+            case 'KeyD':
+                moveRight = false;
+                break;
+        }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    // === RAYCASTER DE PULO (CHÃO) ===
+    // Configurado para sair dos "olhos" (câmera) para baixo
+    raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, playerHeight + 0.1);
+
+    // --- TEXTURAS ---
+    const textureLoader = new THREE.TextureLoader();
+    const floorTexture = textureLoader.load('img/minecraftTop.png');
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(500, 500);
+    const sideTexture = textureLoader.load('img/minecraftTextureBlock.png');
+    const topTexture = textureLoader.load('img/minecraftTop.png');
+    const bottomTexture = textureLoader.load('img/minecraftBot.png');
+
+    // --- CHÃO ---
+    let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
+    floorGeometry.rotateX(-Math.PI / 2);
+    const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    scene.add(floor);
+    // Adiciona o chão à lista de objetos colidíveis
+    objects.push(floor); 
+
+    // --- OBJETOS (BLOCOS) ---
+    const boxGeometry = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
+    const sideMaterial = new THREE.MeshBasicMaterial({ map: sideTexture });
+    const topMaterial = new THREE.MeshBasicMaterial({ map: topTexture });
+    const bottomMaterial = new THREE.MeshBasicMaterial({ map: bottomTexture });
+    const multiMaterial = [sideMaterial, sideMaterial, topMaterial, bottomMaterial, sideMaterial, sideMaterial];
+
+    for (let i = 0; i < 1000; i++) {
+        const box = new THREE.Mesh(boxGeometry, multiMaterial);
+        box.position.x = Math.floor(Math.random() * 30 - 15) * 12;
+        
+        // Vamos simplificar: O Y gerado é a *base* do bloco
+        const baseY = Math.floor(Math.random() * 30) * 20 + 10;
+        box.position.y = baseY + 5; // +5 porque a altura do bloco é 10 (centro)
+        
+        box.position.z = Math.floor(Math.random() * 30 - 15) * 12;
+        scene.add(box);
+        objects.push(box); // Adiciona o bloco à lista de colisões
+    }
+
+    // --- BLOCO DE VITÓRIA ---
+    const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
+    const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
+    const victoryBox = new THREE.Mesh(victoryGeometry, victoryMaterial);
+    victoryBox.position.set(0, WIN_HEIGHT + 2.5, 0);
+    scene.add(victoryBox);
+    // (Não precisa de colisão com o bloco de vitória, só de detectar a altura Y)
+
+    // --- RENDERIZADOR ---
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setAnimationLoop(animate);
+    document.body.appendChild(renderer.domElement);
+
+    window.addEventListener('resize', onWindowResize);
+    updateTimerDisplay();
 }
 
 function onWindowResize() {
-
-	camera.aspect = window.innerWidth / window.innerHeight;
-	camera.updateProjectionMatrix();
-
-	renderer.setSize(window.innerWidth, window.innerHeight);
-
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function animate() {
+// === FUNÇÕES DE ESTADO DE JOGO ===
+function startGame() {
+    gameActive = true;
+    gameTime = 300;
+    maxAltitudeScore = 0;
+    scoreManager.setScore(0);
+    // Posição inicial: "olhos" em Y=10
+    controls.object.position.set(0, playerHeight, 0); 
+    velocity.set(0, 0, 0);
 
+    // === MUDANÇA 3: RESETAR O CONTADOR DE PULOS ===
+    jumpCount = 0;
+
+    clearInterval(timerInterval);
+    timerInterval = setInterval(updateTimer, 1000);
+    updateTimerDisplay();
+}
+function resumeGame() {
+    gameActive = true;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(updateTimer, 1000);
+}
+function updateTimer() {
+    if (!gameActive) { clearInterval(timerInterval); return; }
+    gameTime--;
+    updateTimerDisplay();
+    if (gameTime <= 0) { gameOver('Tempo Esgotado!'); }
+}
+function updateTimerDisplay() {
+    const minutes = Math.floor(gameTime / 60);
+    const seconds = gameTime % 60;
+    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+function gameOver(message) {
+    gameActive = false;
+    clearInterval(timerInterval);
+    finalScore = Math.floor(maxAltitudeScore - playerHeight);
+    saveScore(finalScore);
+    controls.unlock();
+    document.getElementById('gameOverMessage').textContent = message;
+    document.getElementById('gameOverScore').textContent = `Pontuação Final: ${finalScore}m`;
+    document.getElementById('gameOverScreen').style.display = 'flex';
+    showRanking();
+}
+function gameWon() {
+    gameActive = false;
+    clearInterval(timerInterval);
+    finalScore = Math.floor(maxAltitudeScore - playerHeight);
+    saveScore(finalScore, true);
+    controls.unlock();
+    document.getElementById('gameOverMessage').textContent = 'VOCÊ VENCEU!';
+    document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo Restante: ${timerElement.textContent}`;
+    document.getElementById('gameOverScreen').style.display = 'flex';
+    showRanking();
+}
+// === FUNÇÕES DE RANKING (Sem alterações) ===
+function saveScore(score, isWin = false) {
+    const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
+    ranking.push({ name: playerName, score: score });
+    ranking.sort((a, b) => b.score - a.score);
+    const top10 = ranking.slice(0, 10);
+    localStorage.setItem('OEscaladorRanking', JSON.stringify(top10));
+}
+function showRanking() {
+    const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
+    const listElement = document.getElementById('rankingList');
+    listElement.innerHTML = '';
+    if (ranking.length === 0) {
+        listElement.innerHTML = '<li>Nenhuma pontuação registrada.</li>';
+    } else {
+        ranking.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.textContent = `${index + 1}. ${item.name}: ${item.score} metros`;
+            listElement.appendChild(li);
+        });
+    }
+    document.getElementById('rankingOverlay').style.display = 'flex';
+}
+function hideRanking() {
+    document.getElementById('rankingOverlay').style.display = 'none';
+}
+function resetRanking() {
+    localStorage.removeItem('OEscaladorRanking');
+    showRanking();
+}
+
+// === FUNÇÃO DE ANIMAÇÃO (LÓGICA DE FÍSICA CORRIGIDA) ===
+function animate() {
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
 
-    if (controls.isLocked === true) {
-
-        // ... (Seu código de raycaster e física de movimento/gravidade permanece aqui) ...
-
-        raycaster.ray.origin.copy(controls.object.position);
-        raycaster.ray.origin.y -= 10;
-
-        const intersections = raycaster.intersectObjects(objects, false);
-
-        const onObject = intersections.length > 0;
-        // ... (demais cálculos de delta, velocidade, direção, etc.) ...
+    if (controls.isLocked === true && gameActive) {
         
+        // === 1. ATUALIZA O RAYCASTER DE CHÃO ===
+        raycaster.ray.origin.copy(controls.object.position);
+        
+        const intersections = raycaster.intersectObjects(objects, false);
+        const onObject = intersections.length > 0;
+
+        // === 2. FÍSICA (GRAVIDADE E ATRITO) ===
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
+        velocity.y -= 9.8 * 100.0 * delta; // Gravidade
 
-        velocity.y -= 9.8 * 100.0 * delta;
+        // === 3. LÓGICA DE CHÃO E PULO ===
+        if (onObject === true) {
+            const distance = intersections[0].distance;
+            
+            // Se estamos "em cima" de algo
+            if (distance <= playerHeight) {
+                // Para de cair
+                velocity.y = Math.max(0, velocity.y);
 
+                // === MUDANÇA 4: RESETAR O PULO ===
+                // Apenas reseta o contador de pulos se o jogador
+                // estiver *parado* no chão (velocity.y === 0).
+                // Isso impede que o pulo seja resetado no meio do ar.
+                if (velocity.y === 0) {
+                    jumpCount = MAX_JUMPS;
+                }
+                
+                // "Gruda" o jogador no chão
+                if (velocity.y === 0) {
+                    const groundY = intersections[0].point.y;
+                    controls.object.position.y = groundY + playerHeight;
+                }
+            }
+        }
+
+        // === 4. INPUT DE MOVIMENTO ===
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize();
+        direction.normalize(); 
 
         if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
 
-        if (onObject === true) {
+        // === 5. APLICA O MOVIMENTO ===
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        controls.object.position.y += (velocity.y * delta);
 
-            velocity.y = Math.max(0, velocity.y);
-            canJump = true;
-
+        // === 6. LÓGICA DE QUEDA (MORTE) ===
+        if (controls.object.position.y < -50) {
+            gameOver('Você Caiu!');
         }
 
-        controls.moveRight(- velocity.x * delta);
-        controls.moveForward(- velocity.z * delta);
-
-        controls.object.position.y += (velocity.y * delta); // new behavior
-
-        if (controls.object.position.y < 10) {
-
-            velocity.y = 0;
-            controls.object.position.y = 10;
-
-            canJump = true;
-
+        // === 7. LÓGICA DE VITÓRIA ===
+        if (controls.object.position.y > WIN_HEIGHT) {
+            gameWon();
         }
         
-        // === NOVO CÓDIGO: LÓGICA DE RECORD DE ALTURA ===
+        // === 8. LÓGICA DE PONTUAÇÃO ===
         const currentHeight = controls.object.position.y;
-        
-        // 1. Verifica se a altura atual é maior que o recorde anterior (maxAltitudeScore)
-        // E garante que a altura seja significativa (por exemplo, maior que o nível do chão, que é 10)
-        if (currentHeight > maxAltitudeScore && currentHeight > 10) {
-            
-            // 2. Atualiza o recorde de altura
+        if (currentHeight > maxAltitudeScore && currentHeight > playerHeight) {
             maxAltitudeScore = currentHeight;
-            
-            // 3. Define a pontuação do jogo para ser igual à altura máxima alcançada.
-            // Arredondamos para um número inteiro para ser um placar limpo.
-            scoreManager.setScore(Math.floor(maxAltitudeScore - 10)); 
-            // Subtraímos 10 para a pontuação começar em 0 na altura do chão.
+            scoreManager.setScore(Math.floor(maxAltitudeScore - playerHeight));
         }
-        // ===============================================
-
     }
+
     prevTime = time;
-
     renderer.render(scene, camera);
-
-}
+}	
