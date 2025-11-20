@@ -8,6 +8,16 @@ let raycaster; // Nosso único raycaster, usado para o chão
 let scoreElement;
 let skyboxMesh; // Variável global para o céu
 
+let currentDifficulty = 'EASY';
+const difficultySettings = {
+    EASY: { time: 300, height: 300, text: 'FÁCIL' }, // 5 minutos, 300m
+    NORMAL: { time: 300, height: 500, text: 'NORMAL' }, // 5 minutos, 500m
+    HARD: { time: 240, height: 600, text: 'DIFÍCIL' } // 3:30 minutos, 600m
+};
+let currentWinHeight = difficultySettings[currentDifficulty].height;
+let initialGameTime = difficultySettings[currentDifficulty].time; // Tempo da dificuldade atual
+let gameTime = initialGameTime;
+
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
@@ -23,29 +33,31 @@ const direction = new THREE.Vector3();
 
 // === NOVAS VARIÁVEIS GLOBAIS ===
 let maxAltitudeScore = 0;
-const WIN_HEIGHT = 600;
+const WIN_HEIGHT = 300;
 const MAP_BOUNDARY = 400; // Limite da borda do mapa
 
 // Variáveis de Estado do Jogo e Tempo
 let gameActive = false;
 let isPaused = false;
-let freeMode = false; // <<< NOVO: Modo de tempo livre
+let freeMode = false;
 const INITIAL_GAME_TIME = 300; // Tempo inicial em segundos (5 minutos)
 // ...
-let gameTime = INITIAL_GAME_TIME;
+
 let timerInterval;
 let timerElement;
 let finalScore = 0;
 let playerName = 'Jogador'; // Nome padrão
 
+let difficultyElement;
+let winBoxMesh; // Variável para a caixa de vitória
+
 //  VARIÁVEL DE ALTURA DO JOGADOR
 const playerHeight = 10.0; // Altura do "pé" do jogador em relação à câmera
 
 // NOVAS VARIÁVEIS DE ÁUDIO 
-// NOVAS VARIÁVEIS DE ÁUDIO 
 let audioListener, backgroundMusic, jumpSound;
 let audioLoader;
-let imminentDangerMusic; // <<< NOVO: Música para contagem regressiva
+let imminentDangerMusic;
 // ... (restante das variáveis globais)
 
 init();
@@ -137,31 +149,31 @@ function init() {
 
     scoreElement = document.getElementById('scoreValue');
     timerElement = document.getElementById('timerValue');
+    difficultyElement = document.getElementById('difficultyText');
 
     //  LISTENERS DOS BOTÕES DA UI 
-    document.getElementById('playButton').addEventListener('click', () => {
-        // ... (seu código existente para playButton)
-        // ...
-        controls.lock();
-    });
+
 
     // === NOVO: Listener para "Jogar com tempo livre" ===
-    document.getElementById('playButtonFree').addEventListener('click', () => {
+   document.getElementById('playButton').addEventListener('click', () => {
         const nameInput = document.getElementById('playerNameInput');
+        
+        // 1. Configura o nome do jogador
         if (nameInput.value.trim() !== '') {
             playerName = nameInput.value.trim();
         } else {
             playerName = 'Jogador';
         }
 
-        freeMode = true; // <<< Ativa o modo livre!
+        // 2. Define o modo de jogo (Normal)
+        freeMode = false; // <<< Garante que o modo normal (com tempo) esteja ativado
 
+        // 3. Inicia o Áudio (necessário para navegadores que bloqueiam áudio)
         if (audioListener.context.state === 'suspended') {
             audioListener.context.resume();
         }
-        if (backgroundMusic && !backgroundMusic.isPlaying) {
-            backgroundMusic.play();
-        }
+        
+        // 4. Inicia o controle (Isso dispara o evento 'lock' que chama startGame())
         controls.lock();
     });
 
@@ -194,6 +206,8 @@ function init() {
             resetRanking();
         }
     });
+
+    document.getElementById('DificultButton').addEventListener('click', toggleDifficulty);
 
     //  LISTENERS DO CONTROLE (LOCK/UNLOCK)
     controls.addEventListener('lock', function () {
@@ -389,9 +403,11 @@ function init() {
     // BLOCO DE VITÓRIA 
     const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
     const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
-    const victoryBox = new THREE.Mesh(victoryGeometry, victoryMaterial);
-    victoryBox.position.set(0, WIN_HEIGHT + 2.5, 0);
-    scene.add(victoryBox);
+    winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
+    winBoxMesh.position.set(0, currentWinHeight + 2.5, 0); // Usa a altura da dificuldade atual
+    scene.add(winBoxMesh);
+
+
 
     //  RENDERIZADOR
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -417,6 +433,34 @@ function respawnPlayer() {
     jumpCount = 0; // Reseta o pulo duplo
 }
 
+// FUNÇÃO PARA MUDAR A DIFICULDADE
+function toggleDifficulty() {
+    // Array de nomes das dificuldades
+    const difficulties = ['EASY', 'NORMAL', 'HARD'];
+    const currentIndex = difficulties.indexOf(currentDifficulty);
+    const nextIndex = (currentIndex + 1) % difficulties.length;
+
+    currentDifficulty = difficulties[nextIndex];
+    const settings = difficultySettings[currentDifficulty];
+
+    // Atualiza as variáveis globais
+    currentWinHeight = settings.height;
+    initialGameTime = settings.time;
+
+    // Atualiza a UI
+    if (difficultyElement) {
+        difficultyElement.textContent = settings.text;
+    }
+
+    // Atualiza a posição do bloco de vitória
+    if (winBoxMesh) {
+        winBoxMesh.position.y = currentWinHeight + 2.5;
+    }
+
+    console.log(`Dificuldade alterada para: ${settings.text} (Tempo: ${initialGameTime}s, Altura: ${currentWinHeight}m)`);
+}
+// ... (restante do código)
+
 
 // FUNÇÕES DE ESTADO DE JOGO 
 function startGame() {
@@ -425,8 +469,7 @@ function startGame() {
 
     // === MUDANÇA: Lógica de inicialização do tempo e música ===
     if (!freeMode) {
-        gameTime = INITIAL_GAME_TIME;
-        clearInterval(timerInterval);
+        gameTime = initialGameTime; // <--- AQUI ESTÁ A CORREÇÃO       
         timerInterval = setInterval(updateTimer, 1000);
         updateTimerDisplay(); // Atualiza para 05:00
 
@@ -580,7 +623,7 @@ function gameWon() {
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
     scoreElement.textContent = finalScore;
 
-    const elapsedTime = INITIAL_GAME_TIME - gameTime;
+    const elapsedTime = initialGameTime - gameTime; // <--- AQUI ESTÁ A CORREÇÃO
 
     saveScore(finalScore, elapsedTime, true);
     controls.unlock();
@@ -726,7 +769,7 @@ function animate() {
             respawnPlayer();
         }
 
-        if (controls.object.position.y > WIN_HEIGHT) {
+        if (controls.object.position.y > currentWinHeight) {
             gameWon();
         }
     }
