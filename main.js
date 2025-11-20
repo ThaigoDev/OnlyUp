@@ -40,8 +40,11 @@ let playerName = 'Jogador'; // Nome padrão
 const playerHeight = 10.0; // Altura do "pé" do jogador em relação à câmera
 
 // NOVAS VARIÁVEIS DE ÁUDIO 
+// NOVAS VARIÁVEIS DE ÁUDIO 
 let audioListener, backgroundMusic, jumpSound;
 let audioLoader;
+let imminentDangerMusic; // <<< NOVO: Música para contagem regressiva
+// ... (restante das variáveis globais)
 
 init();
 
@@ -93,6 +96,28 @@ function init() {
     }, (xhr) => {}, (err) => {
         console.error('ERRO: Não foi possível carregar music/background.mp3', err);
     });
+    // ... (código dentro de init, após o carregamento do jumpSound)
+    audioLoader.load('sounds/jump.mp3', function(buffer) {
+        jumpSound.setBuffer(buffer);
+        jumpSound.setVolume(0.5);
+        console.log("Sucesso: Som de pulo (sounds/jump.mp3) carregado.");
+    }, (xhr) => {}, (err) => {
+        console.error('ERRO: Não foi possível carregar sounds/jump.mp3', err);
+    });
+
+    // === NOVO: Carregamento da Música de Alerta de Tempo ===
+    imminentDangerMusic = new THREE.Audio(audioListener);
+    audioLoader.load('sounds/tempo_esgotando.mp3', function(buffer) {
+        imminentDangerMusic.setBuffer(buffer);
+        imminentDangerMusic.setLoop(true);
+        imminentDangerMusic.setVolume(0.4); // Volume um pouco mais alto para alerta
+        console.log("Sucesso: Música de alerta (sounds/tempo_esgotando.mp3) carregada.");
+    }, (xhr) => {}, (err) => {
+        console.error('ERRO: Não foi possível carregar sounds/tempo_esgotando.mp3', err);
+    });
+    // ========================================================
+    // ... (restante do código dentro de init)
+
     audioLoader.load('sounds/jump.mp3', function(buffer) {
         jumpSound.setBuffer(buffer);
         jumpSound.setVolume(0.5);
@@ -380,32 +405,77 @@ function respawnPlayer() {
 
 // FUNÇÕES DE ESTADO DE JOGO 
 function startGame() {
-    gameActive = true;
-    isPaused = false; 
-    gameTime = INITIAL_GAME_TIME; 
-    maxAltitudeScore = 0;
-    scoreElement.textContent = '0'; 
+    gameActive = true;
+    isPaused = false; 
+    gameTime = INITIAL_GAME_TIME; 
+    maxAltitudeScore = 0;
+    scoreElement.textContent = '0'; 
+    
+    respawnPlayer(); 
+    
+    clearInterval(timerInterval);
+    timerInterval = setInterval(updateTimer, 1000);
+    updateTimerDisplay();
     
-    respawnPlayer(); 
-    
-    clearInterval(timerInterval);
-    timerInterval = setInterval(updateTimer, 1000);
-    updateTimerDisplay();
+    // NOVO: Garantir que a música certa toque e a outra pare
+    if (imminentDangerMusic && imminentDangerMusic.isPlaying) {
+        imminentDangerMusic.stop();
+    }
+    if (backgroundMusic && !backgroundMusic.isPlaying) {
+        backgroundMusic.play();
+    }
 }
 
 function resumeGame() {
-    gameActive = true;
-    isPaused = false; 
-    clearInterval(timerInterval);
-    timerInterval = setInterval(updateTimer, 1000);
+    gameActive = true;
+    isPaused = false; 
+    clearInterval(timerInterval);
+    timerInterval = setInterval(updateTimer, 1000);
+
+    // NOVO: Verifica qual música deve continuar tocando
+    const DANGER_THRESHOLD = 45; 
+    
+    if (gameTime <= DANGER_THRESHOLD) {
+        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
+    } else {
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
+    }
 }
 
+f// FUNÇÕES DE ESTADO DE JOGO 
+// ...
+
 function updateTimer() {
-    if (!gameActive) { clearInterval(timerInterval); return; }
-    gameTime--;
-    updateTimerDisplay();
-    if (gameTime <= 0) { gameOver('Tempo Esgotado!'); }
+    if (!gameActive) { clearInterval(timerInterval); return; }
+    gameTime--;
+    updateTimerDisplay();
+    
+    if (gameTime <= 0) { 
+        gameOver('Tempo Esgotado!'); 
+        // Se o tempo esgotar, garante que ambas as músicas parem.
+        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        return;
+    }
+    
+    // === NOVO: Lógica de Troca de Música ===
+    const DANGER_THRESHOLD = 45; // 45 segundos
+    
+    if (gameTime === DANGER_THRESHOLD) {
+        // Para a música normal e inicia a de alerta.
+        if (backgroundMusic && backgroundMusic.isPlaying) {
+            backgroundMusic.stop();
+        }
+        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) {
+            imminentDangerMusic.play();
+        }
+    }
+    // =======================================
 }
+
+// ... (restante do código)
 
 function updateTimerDisplay() {
     const minutes = Math.floor(gameTime / 60);
