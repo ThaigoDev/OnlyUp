@@ -1,59 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <title>O Escalador - three.js</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-        <link type="text/css" rel="stylesheet" href="main.css">
-        </head>
-    <body>
-        <div id="blocker">
-            <div id="instructions" style="display: flex;">
-                <p style="font-size:36px">
-                    Only Up Minecraft Edition!
-                </p>
-                <p>
-                    Move: WASD<br/>
-                    Jump: SPACE<br/>
-                    Look: MOUSE
-                </p>
-                <br>
-                <input type="text" id="playerNameInput" placeholder="Digite seu nome" maxlength="15">
-                
-                <button id="playButton">Jogar</button>
-                <button id="rankingButton">Ranking</button>
-            </div>
-            
-            <div id="pauseScreen" style="display: none;">
-                <p style="font-size:36px">Jogo Pausado</p>
-                <button id="resumeButton">Continuar</button>
-                </div>
 
-            <div id="gameOverScreen" style="display: none;">
-                <h2 id="gameOverMessage" style="font-size:36px;">Game Over</h2>
-                <p id="gameOverScore" style="font-size: 24px;"></p>
-                <button id="restartButton">Tentar Novamente</button>
-            </div>
+<head>
+    <title>O Escalador - three.js</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="main.css">
+</head>
+
+<body>
+    <div id="blocker">
+        <div id="instructions" style="display: flex;">
+            <p style="font-size:36px">
+                Only Up Minecraft Edition!
+            </p>
+            <p>
+                Move: WASD<br />
+                Jump: SPACE<br />
+                Look: MOUSE
+            </p>
+            <br>
+            <input type="text" id="playerNameInput" placeholder="Digite seu nome" maxlength="15">
+
+            <button id="playButton">Jogar</button>
+            <button id="playButtonFree">Jogar com tempo livre</button>
+            <button id="rankingButton">Ranking</button>
         </div>
 
-        <div id="scoreContainer" class="game-hud">
-            Pontuação: <span id="scoreValue">0</span>m
+        <div id="pauseScreen" style="display: none;">
+            <p style="font-size:36px">Jogo Pausado</p>
+            <button id="resumeButton">Continuar</button>
+            <button id="TelaDeInicioButton">tela de inicio</button>
         </div>
 
-        <div id="timerContainer" class="game-hud">
-            Tempo: <span id="timerValue">05:00</span>
+        <div id="gameOverScreen" style="display: none;">
+            <h2 id="gameOverMessage" style="font-size:36px;">Game Over</h2>
+            <p id="gameOverScore" style="font-size: 24px;"></p>
+            <button id="restartButton">Tentar Novamente</button>
         </div>
+    </div>
 
-        <div id="rankingOverlay">
-            <div id="rankingBox">
-                <h2>Melhores Pontuações</h2>
-                <ol id="rankingList"></ol>
-                <button id="resetRankingButton">Resetar</button>
-                <button id="closeRanking">Fechar</button>
-            </div>
+    <div id="scoreContainer" class="game-hud">
+        Pontuação: <span id="scoreValue">0</span>m
+    </div>
+
+    <div id="timerContainer" class="game-hud">
+        Tempo: <span id="timerValue">05:00</span>
+    </div>
+
+    <div id="rankingOverlay">
+        <div id="rankingBox">
+            <h2>Melhores Pontuações</h2>
+            <ol id="rankingList"></ol>
+            <button id="resetRankingButton">Resetar</button>
+            <button id="closeRanking">Fechar</button>
         </div>
+    </div>
 
-        <script type="importmap">
+    <script type="importmap">
             {
                 "imports": {
                     "three": "../build/three.module.js",
@@ -61,6 +65,7 @@
                 }
             }
         </script>
-        <script type="module" src="main.js"></script>
-    </body>
+    <script type="module" src="main.js"></script>
+</body>
+
 </html>
