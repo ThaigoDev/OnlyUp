@@ -235,20 +235,33 @@ function generateLevel(maxHeight) {
     movingObjects.length = 0;
     if (winBoxMesh) scene.remove(winBoxMesh);
 
+    // ... (código anterior de limpeza)
+
     // 2. Gerar novos blocos com Grid e ALTA DENSIDADE
-    const occupiedPositions = new Set(); 
+    const occupiedBoxes = []; // Usaremos Bounding Boxes para checagem de colisão
+    
+    // Pegar o BoundingBox do Chão (objects[0]) para evitar colisão inicial
+    objects[0].geometry.computeBoundingBox();
+    const floorBox = new THREE.Box3().setFromObject(objects[0]);
+    occupiedBoxes.push(floorBox);
+
     // Diminui o gridSize para 12 (blocos tem tam 10), assim ficam mais perto sem encostar
     const gridSize = 12; 
 
-    // Loop vertical a cada 8 unidades (mais granular que 10)
+    // Loop vertical a cada 8 unidades
     for (let yLevel = 10; yLevel < maxHeight; yLevel += 8) {
         
         // AUMENTAMOS AQUI: De 10 a 18 blocos por camada de altura
-        // Isso cria uma "nuvem" densa de blocos para subir
         const blocksInLayer = Math.floor(Math.random() * 8) + 10; 
 
         for (let b = 0; b < blocksInLayer; b++) {
             const shapeIndex = Math.floor(Math.random() * geometries.length);
+            
+            // **NOVO: Garante que a geometria tem BoundingBox calculado**
+            if (!geometries[shapeIndex].boundingBox) {
+                geometries[shapeIndex].computeBoundingBox();
+            }
+            
             const mesh = new THREE.Mesh(geometries[shapeIndex], materialsList[shapeIndex]);
 
             let validPosition = false;
@@ -260,30 +273,52 @@ function generateLevel(maxHeight) {
                 const rX = Math.floor((Math.random() * 24 - 12)) * gridSize; 
                 const rZ = Math.floor((Math.random() * 24 - 12)) * gridSize;
                 
-                // Pequena variação vertical para não ficar tudo alinhado perfeitamente
+                // Pequena variação vertical
                 const rY = yLevel + Math.floor(Math.random() * 6 - 3);
 
-                const posKey = `${rX},${rY},${rZ}`;
+                // Regra: Não spawna perto do spawn inicial (0,0,0) até 30m de altura
+                if (rY < 30 && Math.abs(rX) < 20 && Math.abs(rZ) < 20) {
+                    attempts++;
+                    continue; 
+                }
 
-                // Verifica colisão de posição E garante buraco no centro para spawn (primeiros 20m)
-                if (!occupiedPositions.has(posKey)) {
-                    // Regra: Não spawna em cima do player no início (0,0,0)
-                    if (rY < 30 && Math.abs(rX) < 20 && Math.abs(rZ) < 20) {
-                        attempts++;
-                        continue; 
+                let finalY;
+                // Ajuste de finalY para colocar a base do objeto em rY,
+                // e então o centro Y do objeto será ajustado a partir daí.
+                // Isso é para que a posição seja mais consistente para o Bounding Box.
+                const bboxMinY = geometries[shapeIndex].boundingBox.min.y;
+                const bboxMaxY = geometries[shapeIndex].boundingBox.max.y;
+                const objectHeight = bboxMaxY - bboxMinY;
+                
+                // finalY é a posição Y do centro do objeto
+                finalY = rY + (objectHeight / 2) - bboxMinY; 
+
+                mesh.position.set(rX, finalY, rZ);
+
+                // PASSO 1: Calcular Bounding Box do Novo Bloco
+                const newBox = new THREE.Box3().setFromObject(mesh);
+                
+                let intersectsExisting = false;
+                
+                // PASSO 2: Verificar Intersecção com Blocos Existentes
+                for (const existingBox of occupiedBoxes) {
+                    if (newBox.intersectsBox(existingBox)) {
+                        intersectsExisting = true;
+                        break;
                     }
+                }
 
-                    const finalY = (geometries[shapeIndex].type === 'SphereGeometry') ? rY + 6 : rY + 5;
-
-                    mesh.position.set(rX, finalY, rZ);
-                    occupiedPositions.add(posKey);
+                if (!intersectsExisting) {
                     validPosition = true;
 
                     scene.add(mesh);
                     objects.push(mesh);
+                    
+                    // PASSO 3: Adicionar o Bounding Box do novo bloco à lista de ocupados
+                    occupiedBoxes.push(newBox); 
 
                     // Movimento em blocos altos
-                    if (rY > 150 && Math.random() < 0.2) { // 20% de chance de movimento
+                    if (rY > 150 && Math.random() < 0.2) { 
                         mesh.initialX = rX;
                         movingObjects.push(mesh);
                     }
