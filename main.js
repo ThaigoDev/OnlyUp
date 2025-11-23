@@ -2,63 +2,47 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 let camera, scene, renderer, controls;
-const objects = [];
-const movingObjects = []; // Array para blocos que se movem
-let raycaster; // Nosso único raycaster, usado para o chão
-let scoreElement;
-let skyboxMesh; // Variável global para o céu
+const objects = []; // Blocos com colisão
+const movingObjects = [];
+let raycaster;
+let scoreElement, timerElement;
+let skyboxMesh;
+
+// Variáveis globais de materiais e geometrias para reuso na geração de nível
+let geometries = [];
+let materialsList = [];
 
 let currentDifficulty = 'EASY';
 const difficultySettings = {
-    EASY: { time: 300, height: 300, text: 'FÁCIL' }, // 5 minutos, 300m
-    NORMAL: { time: 300, height: 500, text: 'NORMAL' }, // 5 minutos, 500m
-    HARD: { time: 240, height: 600, text: 'DIFÍCIL' } // 3:30 minutos, 600m
+    EASY: { time: 300, height: 300, text: 'FÁCIL' },
+    NORMAL: { time: 300, height: 500, text: 'NORMAL' },
+    HARD: { time: 240, height: 600, text: 'DIFÍCIL' }
 };
 let currentWinHeight = difficultySettings[currentDifficulty].height;
-let initialGameTime = difficultySettings[currentDifficulty].time; // Tempo da dificuldade atual
+let initialGameTime = difficultySettings[currentDifficulty].time;
 let gameTime = initialGameTime;
 
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
-
+let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 let jumpCount = 0;
-const MAX_JUMPS = 2; // Define o número máximo de pulos (1 = pulo normal, 2 = pulo duplo)
+const MAX_JUMPS = 2;
 
 let prevTime = performance.now();
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 
-
-// === NOVAS VARIÁVEIS GLOBAIS ===
 let maxAltitudeScore = 0;
-const WIN_HEIGHT = 300;
-const MAP_BOUNDARY = 400; // Limite da borda do mapa
-
-// Variáveis de Estado do Jogo e Tempo
+const MAP_BOUNDARY = 400;
 let gameActive = false;
 let isPaused = false;
 let freeMode = false;
-const INITIAL_GAME_TIME = 300; // Tempo inicial em segundos (5 minutos)
-// ...
-
 let timerInterval;
-let timerElement;
 let finalScore = 0;
-let playerName = 'Jogador'; // Nome padrão
-
+let playerName = 'Jogador';
 let difficultyElement;
-let winBoxMesh; // Variável para a caixa de vitória
+let winBoxMesh;
+const playerHeight = 10.0;
 
-//  VARIÁVEL DE ALTURA DO JOGADOR
-const playerHeight = 10.0; // Altura do "pé" do jogador em relação à câmera
-
-// NOVAS VARIÁVEIS DE ÁUDIO 
-let audioListener, backgroundMusic, jumpSound;
-let audioLoader;
-let imminentDangerMusic;
-// ... (restante das variáveis globais)
+let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, audioLoader;
 
 init();
 
@@ -68,356 +52,325 @@ function init() {
 
     scene = new THREE.Scene();
 
-    // CÉU AZUL COM NUVENS 
+    // --- AMBIENTE ---
     const cubeTextureLoader = new THREE.CubeTextureLoader();
-    // Links estáveis do three.js para um céu azul
     const textureCube = cubeTextureLoader.load([
-        'https://threejs.org/examples/textures/cube/Bridge2/posx.jpg', // Direita
-        'https://threejs.org/examples/textures/cube/Bridge2/negx.jpg', // Esquerda
-        'https://threejs.org/examples/textures/cube/Bridge2/posy.jpg', // Cima
-        'https://threejs.org/examples/textures/cube/Bridge2/negy.jpg', // Baixo
-        'https://threejs.org/examples/textures/cube/Bridge2/posz.jpg', // Frente
-        'https://threejs.org/examples/textures/cube/Bridge2/negz.jpg'  // Trás
+        'https://threejs.org/examples/textures/cube/Bridge2/posx.jpg',
+        'https://threejs.org/examples/textures/cube/Bridge2/negx.jpg',
+        'https://threejs.org/examples/textures/cube/Bridge2/posy.jpg',
+        'https://threejs.org/examples/textures/cube/Bridge2/negy.jpg',
+        'https://threejs.org/examples/textures/cube/Bridge2/posz.jpg',
+        'https://threejs.org/examples/textures/cube/Bridge2/negz.jpg'
     ]);
     const skyboxGeo = new THREE.BoxGeometry(2000, 2000, 2000);
-    const skyboxMat = new THREE.MeshBasicMaterial({
-        envMap: textureCube,
-        side: THREE.BackSide  // Renderiza o lado *interno* do cubo
-    });
+    const skyboxMat = new THREE.MeshBasicMaterial({ envMap: textureCube, side: THREE.BackSide });
     skyboxMesh = new THREE.Mesh(skyboxGeo, skyboxMat);
     scene.add(skyboxMesh);
 
-    //  MUDANÇA: NÉVOA DE CÉU CLARO 
-    scene.fog = new THREE.Fog(0xa0c4ff, 0, 950); // Cor da névoa (azul claro)
-
-    //  MUDANÇA: LUZ DIURNA 
-    const light = new THREE.HemisphereLight(0xffffff, 0x888888, 2.0); // Luz branca de cima, cinza de baixo
+    scene.fog = new THREE.Fog(0xa0c4ff, 0, 950);
+    const light = new THREE.HemisphereLight(0xffffff, 0x888888, 2.0);
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
 
     controls = new PointerLockControls(camera, document.body);
 
-    //  INICIALIZAÇÃO DE ÁUDIO 
-    audioListener = new THREE.AudioListener();
-    camera.add(audioListener); // Adiciona o "ouvido" à câmera
-    backgroundMusic = new THREE.Audio(audioListener);
-    jumpSound = new THREE.Audio(audioListener);
-    audioLoader = new THREE.AudioLoader();
-    audioLoader.load('music/background.mp3', function (buffer) {
-        backgroundMusic.setBuffer(buffer);
-        backgroundMusic.setLoop(true);
-        backgroundMusic.setVolume(0.3);
-    }, (xhr) => { }, (err) => {
-        console.error('ERRO: Não foi possível carregar music/background.mp3', err);
-    });
-    // ... (código dentro de init, após o carregamento do jumpSound)
-    audioLoader.load('sounds/jump.mp3', function (buffer) {
-        jumpSound.setBuffer(buffer);
-        jumpSound.setVolume(0.5);
-        console.log("Sucesso: Som de pulo (sounds/jump.mp3) carregado.");
-    }, (xhr) => { }, (err) => {
-        console.error('ERRO: Não foi possível carregar sounds/jump.mp3', err);
-    });
+    // --- ÁUDIO ---
+    setupAudio();
 
-    // === NOVO: Carregamento da Música de Alerta de Tempo ===
-    imminentDangerMusic = new THREE.Audio(audioListener);
-    audioLoader.load('sounds/tempo_esgotando.mp3', function (buffer) {
-        imminentDangerMusic.setBuffer(buffer);
-        imminentDangerMusic.setLoop(true);
-        imminentDangerMusic.setVolume(0.4); // Volume um pouco mais alto para alerta
-        console.log("Sucesso: Música de alerta (sounds/tempo_esgotando.mp3) carregada.");
-    }, (xhr) => { }, (err) => {
-        console.error('ERRO: Não foi possível carregar sounds/tempo_esgotando.mp3', err);
-    });
-    // ========================================================
-    // ... (restante do código dentro de init)
+    // --- UI ---
+    setupUI();
 
-    audioLoader.load('sounds/jump.mp3', function (buffer) {
-        jumpSound.setBuffer(buffer);
-        jumpSound.setVolume(0.5);
-        console.log("Sucesso: Som de pulo (sounds/jump.mp3) carregado.");
-    }, (xhr) => { }, (err) => {
-        console.error('ERRO: Não foi possível carregar sounds/jump.mp3', err);
-    });
-    // =============================
-
-    //  BUSCA DE ELEMENTOS DA UI 
-    const blocker = document.getElementById('blocker');
-    const instructions = document.getElementById('instructions');
-    const pauseScreen = document.getElementById('pauseScreen');
-    const gameOverScreen = document.getElementById('gameOverScreen');
-
-    scoreElement = document.getElementById('scoreValue');
-    timerElement = document.getElementById('timerValue');
-    difficultyElement = document.getElementById('difficultyText');
-
-    //  LISTENERS DOS BOTÕES DA UI 
-
-
-    // === NOVO: Listener para "Jogar com tempo livre" ===
-   document.getElementById('playButton').addEventListener('click', () => {
-        const nameInput = document.getElementById('playerNameInput');
-        
-        // 1. Configura o nome do jogador
-        if (nameInput.value.trim() !== '') {
-            playerName = nameInput.value.trim();
-        } else {
-            playerName = 'Jogador';
-        }
-
-        // 2. Define o modo de jogo (Normal)
-        freeMode = false; // <<< Garante que o modo normal (com tempo) esteja ativado
-
-        // 3. Inicia o Áudio (necessário para navegadores que bloqueiam áudio)
-        if (audioListener.context.state === 'suspended') {
-            audioListener.context.resume();
-        }
-        
-        // 4. Inicia o controle (Isso dispara o evento 'lock' que chama startGame())
-        controls.lock();
-    });
-
-    document.getElementById('rankingButton').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showRanking();
-    });
-
-    document.getElementById('resumeButton').addEventListener('click', () => {
-        controls.lock();
-    });
-
-    document.getElementById('TelaDeInicioButton').addEventListener('click', () => {
-        returnToMenu(); // Chama a nova função de retorno
-    });
-
-    document.getElementById('restartButton').addEventListener('click', () => {
-        isPaused = false;
-        gameActive = false;
-        controls.lock();
-    });
-
-    document.getElementById('closeRanking').addEventListener('click', () => {
-        hideRanking();
-    });
-
-    document.getElementById('resetRankingButton').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm('Tem certeza que deseja apagar todas as pontuações?')) {
-            resetRanking();
-        }
-    });
-
-    document.getElementById('DificultButton').addEventListener('click', toggleDifficulty);
-
-    //  LISTENERS DO CONTROLE (LOCK/UNLOCK)
-    controls.addEventListener('lock', function () {
-        blocker.style.display = 'none';
-        instructions.style.display = 'none';
-        pauseScreen.style.display = 'none';
-        gameOverScreen.style.display = 'none';
-        document.getElementById('rankingOverlay').style.display = 'none';
-
-        if (isPaused) {
-            isPaused = false;
-            resumeGame();
-        } else if (!gameActive) {
-            startGame();
-        }
-    });
-
-    controls.addEventListener('unlock', function () {
-        blocker.style.display = 'block';
-
-        if (gameActive) {
-            gameActive = false;
-            isPaused = true;
-            clearInterval(timerInterval);
-            pauseScreen.style.display = 'flex';
-        } else {
-            isPaused = false;
-            if (gameOverScreen.style.display === 'none' && document.getElementById('rankingOverlay').style.display === 'none') {
-                instructions.style.display = 'flex';
-            }
-        }
-    });
-
-    scene.add(controls.object);
-
-    //  KEYDOWN / KEYUP 
-    const onKeyDown = function (event) {
-        switch (event.code) {
-            case 'ArrowUp':
-            case 'KeyW':
-                moveForward = true;
-                break;
-            case 'ArrowLeft':
-            case 'KeyA':
-                moveLeft = true;
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                moveBackward = true;
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                moveRight = true;
-                break;
-            case 'Space':
-                if (jumpCount > 0 && gameActive) {
-                    velocity.y = 250;
-                    jumpCount--;
-                    if (jumpSound && jumpSound.buffer) {
-                        if (jumpSound.isPlaying) {
-                            jumpSound.stop();
-                        }
-                        jumpSound.play();
-                    } else {
-                        console.warn("Som de pulo não tocou (buffer vazio). Verifique o caminho 'sounds/jump.mp3'");
-                    }
-                }
-                break;
-        }
-    };
-    const onKeyUp = function (event) {
-        switch (event.code) {
-            case 'ArrowUp':
-            case 'KeyW':
-                moveForward = false;
-                break;
-            case 'ArrowLeft':
-            case 'KeyA':
-                moveLeft = false;
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                moveBackward = false;
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                moveRight = false;
-                break;
-        }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
-
-    //  RAYCASTER 
+    // --- OBJETOS 3D BASE ---
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, playerHeight + 0.1);
+    
+    // Preparar Materiais e Geometrias (para usar no generateLevel)
+    prepareAssets();
 
-    //  TEXTURAS
-    const textureLoader = new THREE.TextureLoader();
+    // Criar o Chão
+    createFloor();
 
-    //  TEXTURA DO CHÃO MINECRAFT 
-    const floorTexture = textureLoader.load('img/minecraftTop.png'); // Sua textura original
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(500, 500);
-    floorTexture.magFilter = THREE.NearestFilter;
+    // --- GERAR NÍVEL INICIAL ---
+    generateLevel(currentWinHeight);
 
-    const sideTexture = textureLoader.load('img/minecraftTextureBlock.png');
-    sideTexture.magFilter = THREE.NearestFilter;
-    const topTexture = textureLoader.load('img/minecraftTop.png');
-    topTexture.magFilter = THREE.NearestFilter;
-    const bottomTexture = textureLoader.load('img/minecraftBot.png');
-    bottomTexture.magFilter = THREE.NearestFilter;
-
-    //  CHÃO MINECRAFT 
-    let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
-    floorGeometry.rotateX(-Math.PI / 2);
-
-    const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture, color: 0xffffff }); // Cor branca (sem tintura)
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    scene.add(floor);
-    objects.push(floor);
-
-
-    //  OBJETOS (BLOCOS, CILINDROS, ESFERAS)
-    const sideMaterial = new THREE.MeshBasicMaterial({
-        map: sideTexture,
-        color: 0xbb8866
-    });
-    const topMaterial = new THREE.MeshBasicMaterial({
-        map: topTexture,
-        color: 0x99ff99
-    });
-    const bottomMaterial = new THREE.MeshBasicMaterial({
-        map: bottomTexture,
-        color: 0x996644
-    });
-
-    // Geometrias
-    const boxGeometry = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
-    const cylinderGeometry = new THREE.CylinderGeometry(5, 5, 10, 16);
-    const sphereGeometry = new THREE.SphereGeometry(6, 16, 16);
-    const geometries = [
-        boxGeometry, boxGeometry, boxGeometry,
-        cylinderGeometry,
-        sphereGeometry
-    ];
-
-    //  MUDANÇA: MATERIAIS COM TEXTURA PARA CILINDRO E ESFERA
-    const boxMaterial = [sideMaterial, sideMaterial, topMaterial, bottomMaterial, sideMaterial, sideMaterial];
-
-    // Material do Cilindro (textura lateral azulada, textura do topo azulada)
-    const cylinderSideMaterial = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }); // Azul
-    const cylinderTopMaterial = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }); // Azul
-    const cylinderMaterial = [cylinderSideMaterial, cylinderTopMaterial, cylinderTopMaterial]; // Lados, Topo, Base
-
-    // Material da Esfera (textura do topo avermelhada)
-    const sphereMaterial = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 }); // Vermelho
-
-    const materials = [
-        boxMaterial, boxMaterial, boxMaterial,
-        cylinderMaterial,
-        sphereMaterial
-    ];
-
-
-    for (let i = 0; i < 1000; i++) {
-        const shapeIndex = Math.floor(Math.random() * geometries.length);
-
-        const mesh = new THREE.Mesh(geometries[shapeIndex], materials[shapeIndex]);
-
-        mesh.position.x = Math.floor(Math.random() * 30 - 15) * 12;
-        const baseY = Math.floor(Math.random() * 30) * 20 + 10;
-
-        // Ajusta a altura da base. O centro do Box/Cilindro é +5, Esfera é +6
-        if (geometries[shapeIndex] === sphereGeometry) {
-            mesh.position.y = baseY + 6;
-        } else {
-            mesh.position.y = baseY + 5;
-        }
-
-        mesh.position.z = Math.floor(Math.random() * 30 - 15) * 12;
-        scene.add(mesh);
-        objects.push(mesh);
-
-        if (baseY > 150) {
-            if (Math.random() < 0.3) {
-                mesh.initialX = mesh.position.x;
-                movingObjects.push(mesh);
-            }
-        }
-    }
-
-    // BLOCO DE VITÓRIA 
-    const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
-    const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
-    winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
-    winBoxMesh.position.set(0, currentWinHeight + 2.5, 0); // Usa a altura da dificuldade atual
-    scene.add(winBoxMesh);
-
-
-
-    //  RENDERIZADOR
+    // Configuração Renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setAnimationLoop(animate);
     document.body.appendChild(renderer.domElement);
-
     window.addEventListener('resize', onWindowResize);
+    
     updateTimerDisplay();
+    document.getElementById('blocker').classList.add('menu-active');
+}
+
+function setupAudio() {
+    audioListener = new THREE.AudioListener();
+    camera.add(audioListener);
+    audioLoader = new THREE.AudioLoader();
+    
+    backgroundMusic = new THREE.Audio(audioListener);
+    audioLoader.load('music/background.mp3', function(buffer) {
+        backgroundMusic.setBuffer(buffer);
+        backgroundMusic.setLoop(true);
+        backgroundMusic.setVolume(0.3);
+    }, undefined, (err) => console.log('Aviso: Sem música background'));
+
+    jumpSound = new THREE.Audio(audioListener);
+    audioLoader.load('sounds/jump.mp3', function(buffer) {
+        jumpSound.setBuffer(buffer);
+        jumpSound.setVolume(0.5);
+    }, undefined, (err) => console.log('Aviso: Sem som jump'));
+
+    imminentDangerMusic = new THREE.Audio(audioListener);
+    audioLoader.load('sounds/tempo_esgotando.mp3', function(buffer) {
+        imminentDangerMusic.setBuffer(buffer);
+        imminentDangerMusic.setLoop(true);
+        imminentDangerMusic.setVolume(0.4);
+    }, undefined, (err) => console.log('Aviso: Sem música perigo'));
+}
+
+function setupUI() {
+    const scoreEl = document.getElementById('scoreValue');
+    const timerEl = document.getElementById('timerValue');
+    const diffEl = document.getElementById('difficultyText');
+    if (scoreEl) scoreElement = scoreEl;
+    if (timerEl) timerElement = timerEl;
+    if (diffEl) difficultyElement = diffEl;
+
+    document.getElementById('playButton').addEventListener('click', () => {
+        setPlayerName(); freeMode = false; startGameSetup();
+    });
+    document.getElementById('playButtonFree').addEventListener('click', () => {
+        setPlayerName(); freeMode = true; startGameSetup();
+    });
+    document.getElementById('rankingButton').addEventListener('click', (e) => { e.stopPropagation(); showRanking(); });
+    document.getElementById('resumeButton').addEventListener('click', () => controls.lock());
+    
+    const goHomeBtns = document.querySelectorAll('#TelaDeInicioButton, #TelaDeInicioButtonGO');
+    goHomeBtns.forEach(btn => btn.addEventListener('click', returnToMenu));
+
+    document.getElementById('restartButton').addEventListener('click', () => {
+        isPaused = false; gameActive = false; controls.lock();
+    });
+    document.getElementById('closeRanking').addEventListener('click', hideRanking);
+    document.getElementById('resetRankingButton').addEventListener('click', (e) => {
+        e.stopPropagation(); if (confirm('Apagar ranking?')) resetRanking();
+    });
+    document.getElementById('DificultButton').addEventListener('click', toggleDifficulty);
+
+    // Controls Events
+    controls.addEventListener('lock', onControlsLock);
+    controls.addEventListener('unlock', onControlsUnlock);
+
+    // Keyboard
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+}
+
+function setPlayerName() {
+    const input = document.getElementById('playerNameInput');
+    playerName = (input && input.value.trim() !== '') ? input.value.trim() : 'Jogador';
+}
+
+function prepareAssets() {
+    const textureLoader = new THREE.TextureLoader();
+    const sideTexture = textureLoader.load('img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
+    const topTexture = textureLoader.load('img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
+    const bottomTexture = textureLoader.load('img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
+
+    // Materiais
+    const sideMat = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0xbb8866 });
+    const topMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x99ff99 });
+    const botMat = new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x996644 });
+    const boxMaterials = [sideMat, sideMat, topMat, botMat, sideMat, sideMat];
+
+    const cylinderMat = [
+        new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }), 
+        new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }),  
+        new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x8888ff }) 
+    ];
+    const sphereMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 });
+
+    // Geometrias
+    const boxGeo = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
+    const cylinderGeo = new THREE.CylinderGeometry(5, 5, 10, 16);
+    const sphereGeo = new THREE.SphereGeometry(6, 16, 16);
+
+    // Preencher arrays globais
+    geometries = [boxGeo, boxGeo, boxGeo, cylinderGeo, sphereGeo]; 
+    materialsList = [boxMaterials, boxMaterials, boxMaterials, cylinderMat, sphereMat];
+}
+
+function createFloor() {
+    const textureLoader = new THREE.TextureLoader();
+    const floorTexture = textureLoader.load('img/minecraftTop.png');
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(500, 500);
+    floorTexture.magFilter = THREE.NearestFilter;
+
+    let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
+    floorGeometry.rotateX(-Math.PI / 2);
+    const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture, color: 0xffffff });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    scene.add(floor);
+    objects.push(floor); // Adiciona à colisão
+}
+
+// --- NOVA FUNÇÃO DE GERAÇÃO DE NÍVEL (CORRIGIDA: MAIOR DENSIDADE) ---
+function generateLevel(maxHeight) {
+    // 1. Limpar blocos antigos
+    for (let i = objects.length - 1; i > 0; i--) {
+        const obj = objects[i];
+        scene.remove(obj);
+        if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => m.dispose());
+        } else {
+            obj.material.dispose();
+        }
+    }
+    
+    objects.length = 1; // Mantém só o chão
+    movingObjects.length = 0;
+    if (winBoxMesh) scene.remove(winBoxMesh);
+
+    // 2. Gerar novos blocos com Grid e ALTA DENSIDADE
+    const occupiedPositions = new Set(); 
+    // Diminui o gridSize para 12 (blocos tem tam 10), assim ficam mais perto sem encostar
+    const gridSize = 12; 
+
+    // Loop vertical a cada 8 unidades (mais granular que 10)
+    for (let yLevel = 10; yLevel < maxHeight; yLevel += 8) {
+        
+        // AUMENTAMOS AQUI: De 10 a 18 blocos por camada de altura
+        // Isso cria uma "nuvem" densa de blocos para subir
+        const blocksInLayer = Math.floor(Math.random() * 8) + 10; 
+
+        for (let b = 0; b < blocksInLayer; b++) {
+            const shapeIndex = Math.floor(Math.random() * geometries.length);
+            const mesh = new THREE.Mesh(geometries[shapeIndex], materialsList[shapeIndex]);
+
+            let validPosition = false;
+            let attempts = 0;
+
+            // Mais tentativas para encontrar vaga
+            while (!validPosition && attempts < 50) {
+                // Gera numa grade horizontal mais controlada (-12 a +12 na grade)
+                const rX = Math.floor((Math.random() * 24 - 12)) * gridSize; 
+                const rZ = Math.floor((Math.random() * 24 - 12)) * gridSize;
+                
+                // Pequena variação vertical para não ficar tudo alinhado perfeitamente
+                const rY = yLevel + Math.floor(Math.random() * 6 - 3);
+
+                const posKey = `${rX},${rY},${rZ}`;
+
+                // Verifica colisão de posição E garante buraco no centro para spawn (primeiros 20m)
+                if (!occupiedPositions.has(posKey)) {
+                    // Regra: Não spawna em cima do player no início (0,0,0)
+                    if (rY < 30 && Math.abs(rX) < 20 && Math.abs(rZ) < 20) {
+                        attempts++;
+                        continue; 
+                    }
+
+                    const finalY = (geometries[shapeIndex].type === 'SphereGeometry') ? rY + 6 : rY + 5;
+
+                    mesh.position.set(rX, finalY, rZ);
+                    occupiedPositions.add(posKey);
+                    validPosition = true;
+
+                    scene.add(mesh);
+                    objects.push(mesh);
+
+                    // Movimento em blocos altos
+                    if (rY > 150 && Math.random() < 0.2) { // 20% de chance de movimento
+                        mesh.initialX = rX;
+                        movingObjects.push(mesh);
+                    }
+                }
+                attempts++;
+            }
+        }
+    }
+
+    // 3. Criar Bloco de Vitória
+    const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
+    const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
+    winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
+    winBoxMesh.position.set(0, maxHeight + 2.5, 0);
+    scene.add(winBoxMesh);
+}
+
+function startGameSetup() {
+    if (audioListener.context.state === 'suspended') {
+        audioListener.context.resume();
+    }
+    controls.lock(); 
+}
+
+function onControlsLock() {
+    document.getElementById('blocker').style.display = 'none';
+    document.getElementById('instructions').style.display = 'none';
+    document.getElementById('pauseScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('rankingOverlay').style.display = 'none';
+    
+    document.getElementById('scoreContainer').style.display = 'block';
+    document.getElementById('timerContainer').style.display = 'block';
+    document.getElementById('blocker').classList.remove('menu-active');
+
+    if (isPaused) {
+        isPaused = false;
+        resumeGame();
+    } else if (!gameActive) {
+        startGame();
+    }
+}
+
+function onControlsUnlock() {
+    document.getElementById('blocker').style.display = 'block';
+    if (gameActive) {
+        gameActive = false;
+        isPaused = true;
+        clearInterval(timerInterval);
+        document.getElementById('pauseScreen').style.display = 'flex';
+    } else {
+        isPaused = false;
+        if (document.getElementById('gameOverScreen').style.display === 'none' && document.getElementById('rankingOverlay').style.display === 'none') {
+            document.getElementById('instructions').style.display = 'flex';
+            document.getElementById('blocker').classList.add('menu-active');
+            document.getElementById('scoreContainer').style.display = 'none';
+            document.getElementById('timerContainer').style.display = 'none';
+        }
+    }
+}
+
+function onKeyDown(event) {
+    switch (event.code) {
+        case 'ArrowUp': case 'KeyW': moveForward = true; break;
+        case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+        case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+        case 'ArrowRight': case 'KeyD': moveRight = true; break;
+        case 'Space':
+            if (jumpCount > 0 && gameActive) {
+                velocity.y = 250;
+                jumpCount--;
+                if (jumpSound && jumpSound.buffer) {
+                    if (jumpSound.isPlaying) jumpSound.stop();
+                    jumpSound.play();
+                }
+            }
+            break;
+    }
+}
+
+function onKeyUp(event) {
+    switch (event.code) {
+        case 'ArrowUp': case 'KeyW': moveForward = false; break;
+        case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+        case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+        case 'ArrowRight': case 'KeyD': moveRight = false; break;
+    }
 }
 
 function onWindowResize() {
@@ -426,115 +379,69 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// FUNÇÃO DE RESPAWN
 function respawnPlayer() {
     controls.object.position.set(0, playerHeight, 0);
     velocity.set(0, 0, 0);
-    jumpCount = 0; // Reseta o pulo duplo
+    jumpCount = 0;
 }
 
-// FUNÇÃO PARA MUDAR A DIFICULDADE
 function toggleDifficulty() {
-    // Array de nomes das dificuldades
     const difficulties = ['EASY', 'NORMAL', 'HARD'];
-    const currentIndex = difficulties.indexOf(currentDifficulty);
-    const nextIndex = (currentIndex + 1) % difficulties.length;
-
+    const nextIndex = (difficulties.indexOf(currentDifficulty) + 1) % difficulties.length;
     currentDifficulty = difficulties[nextIndex];
     const settings = difficultySettings[currentDifficulty];
-
-    // Atualiza as variáveis globais
+    
     currentWinHeight = settings.height;
     initialGameTime = settings.time;
-
-    // Atualiza a UI
-    if (difficultyElement) {
-        difficultyElement.textContent = settings.text;
-    }
-
-    // Atualiza a posição do bloco de vitória
-    if (winBoxMesh) {
-        winBoxMesh.position.y = currentWinHeight + 2.5;
-    }
-
-    console.log(`Dificuldade alterada para: ${settings.text} (Tempo: ${initialGameTime}s, Altura: ${currentWinHeight}m)`);
+    
+    if (difficultyElement) difficultyElement.textContent = settings.text;
+    
+    generateLevel(currentWinHeight);
+    
+    if (!gameActive) respawnPlayer();
 }
-// ... (restante do código)
 
-
-// FUNÇÕES DE ESTADO DE JOGO 
 function startGame() {
     gameActive = true;
     isPaused = false;
-
-    // === MUDANÇA: Lógica de inicialização do tempo e música ===
     if (!freeMode) {
-        gameTime = initialGameTime; // <--- AQUI ESTÁ A CORREÇÃO       
+        gameTime = initialGameTime;
         timerInterval = setInterval(updateTimer, 1000);
-        updateTimerDisplay(); // Atualiza para 05:00
-
-        // NOVO: Garantir que a música certa toque e a outra pare
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) {
-            imminentDangerMusic.stop();
-        }
-        if (backgroundMusic && !backgroundMusic.isPlaying) {
-            backgroundMusic.play();
-        }
+        updateTimerDisplay();
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
     } else {
-        // Modo Livre: Pausa as músicas de tempo e mostra o placar
         if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
         if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
-
-        timerElement.textContent = 'LIVRE'; // Indica que está em modo livre
-
-        // NOVO: Toca a música de fundo normal no modo livre
-        if (backgroundMusic && !backgroundMusic.isPlaying) {
-            backgroundMusic.play();
-        }
+        timerElement.textContent = 'LIVRE';
+        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
     }
-    // =========================================================
-
     maxAltitudeScore = 0;
     scoreElement.textContent = '0';
-
     respawnPlayer();
 }
 
-// main.js (adicione esta nova função fora de init, junto com startGame e gameOver)
-
-/**
- * Para o jogo, reseta o estado e volta para a tela de instruções/menu inicial.
- */
 function returnToMenu() {
-    // 1. Reseta o estado do jogo
     gameActive = false;
     isPaused = false;
-    freeMode = false; // Garante que o modo livre seja resetado
-    clearInterval(timerInterval); // Para o contador de tempo
+    freeMode = false;
+    clearInterval(timerInterval);
 
-    // 2. Para todas as músicas
-    if (backgroundMusic && backgroundMusic.isPlaying) {
-        backgroundMusic.stop();
-    }
-    if (imminentDangerMusic && imminentDangerMusic.isPlaying) {
-        imminentDangerMusic.stop();
-    }
+    if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+    if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
 
-    // 3. Reseta a posição do jogador para um bom estado inicial
     respawnPlayer();
-
-    // 4. Desbloqueia o ponteiro para mostrar a UI de menu
     controls.unlock();
 
-    // Garante que a tela de pause e game over estejam escondidas
     document.getElementById('pauseScreen').style.display = 'none';
     document.getElementById('gameOverScreen').style.display = 'none';
     document.getElementById('rankingOverlay').style.display = 'none';
-
-    // O event listener de 'unlock' do controls já deve exibir 'instructions', 
-    // mas garantimos que o blocker esteja visível, se necessário:
     document.getElementById('blocker').style.display = 'block';
     document.getElementById('instructions').style.display = 'flex';
+    
+    document.getElementById('blocker').classList.add('menu-active');
+    document.getElementById('scoreContainer').style.display = 'none';
+    document.getElementById('timerContainer').style.display = 'none';
 }
 
 function resumeGame() {
@@ -542,70 +449,44 @@ function resumeGame() {
     isPaused = false;
     clearInterval(timerInterval);
     timerInterval = setInterval(updateTimer, 1000);
-
-    // NOVO: Verifica qual música deve continuar tocando
     const DANGER_THRESHOLD = 45;
-
     if (gameTime <= DANGER_THRESHOLD) {
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (backgroundMusic) backgroundMusic.stop();
         if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
     } else {
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (imminentDangerMusic) imminentDangerMusic.stop();
         if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
     }
 }
 
-f// FUNÇÕES DE ESTADO DE JOGO 
-// ...
-
 function updateTimer() {
-    if (!gameActive || freeMode) {
-        clearInterval(timerInterval);
-        return;
-    }
-    if (!gameActive) { clearInterval(timerInterval); return; }
+    if (!gameActive || freeMode) { clearInterval(timerInterval); return; }
     gameTime--;
     updateTimerDisplay();
-
     if (gameTime <= 0) {
         gameOver('Tempo Esgotado!');
-        // Se o tempo esgotar, garante que ambas as músicas parem.
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (backgroundMusic) backgroundMusic.stop();
+        if (imminentDangerMusic) imminentDangerMusic.stop();
         return;
     }
-
-    // === NOVO: Lógica de Troca de Música ===
-    const DANGER_THRESHOLD = 45; // 45 segundos
-
-    if (gameTime === DANGER_THRESHOLD) {
-        // Para a música normal e inicia a de alerta.
-        if (backgroundMusic && backgroundMusic.isPlaying) {
-            backgroundMusic.stop();
-        }
-        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) {
-            imminentDangerMusic.play();
-        }
+    if (gameTime === 45) {
+        if (backgroundMusic) backgroundMusic.stop();
+        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
     }
-    // =======================================
 }
-
-// ... (restante do código)
 
 function updateTimerDisplay() {
     const minutes = Math.floor(gameTime / 60);
     const seconds = gameTime % 60;
-    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    if (timerElement) timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function gameOver(message) {
     gameActive = false;
     isPaused = false;
     clearInterval(timerInterval);
-
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
-    scoreElement.textContent = finalScore;
-
+    if(scoreElement) scoreElement.textContent = finalScore;
     saveScore(finalScore, null, false);
     controls.unlock();
     document.getElementById('gameOverMessage').textContent = message;
@@ -618,23 +499,18 @@ function gameWon() {
     gameActive = false;
     isPaused = false;
     clearInterval(timerInterval);
-
     maxAltitudeScore = controls.object.position.y;
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
-    scoreElement.textContent = finalScore;
-
-    const elapsedTime = initialGameTime - gameTime; // <--- AQUI ESTÁ A CORREÇÃO
-
+    if(scoreElement) scoreElement.textContent = finalScore;
+    const elapsedTime = initialGameTime - gameTime;
     saveScore(finalScore, elapsedTime, true);
     controls.unlock();
-
     document.getElementById('gameOverMessage').textContent = 'VOCÊ VENCEU!';
     document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo: ${formatTime(elapsedTime)}`;
     document.getElementById('gameOverScreen').style.display = 'flex';
     showRanking();
 }
 
-// === FUNÇÕES DE RANKING ===
 function formatTime(totalSeconds) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -643,41 +519,27 @@ function formatTime(totalSeconds) {
 
 function saveScore(score, time, isWin = false) {
     const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
-
     ranking.push({ name: playerName, score: score, time: time });
-
     ranking.sort((a, b) => {
-        if (a.score !== b.score) {
-            return b.score - a.score;
-        }
-
+        if (a.score !== b.score) return b.score - a.score;
         if (a.time === null) return 1;
         if (b.time === null) return -1;
         return a.time - b.time;
     });
-
-    const top10 = ranking.slice(0, 10);
-    localStorage.setItem('OEscaladorRanking', JSON.stringify(top10));
+    localStorage.setItem('OEscaladorRanking', JSON.stringify(ranking.slice(0, 10)));
 }
 
 function showRanking() {
     const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
     const listElement = document.getElementById('rankingList');
     listElement.innerHTML = '';
-
     if (ranking.length === 0) {
         listElement.innerHTML = '<li>Nenhuma pontuação registrada.</li>';
     } else {
         ranking.forEach((item) => {
             const li = document.createElement('li');
-
-            let timeString = "";
-            if (item.time !== null) {
-                timeString = ` (em ${formatTime(item.time)})`;
-            }
-
-            li.textContent = `${item.name}: ${item.score} metros${timeString}`;
-
+            let timeString = item.time !== null ? ` (em ${formatTime(item.time)})` : "";
+            li.textContent = `${item.name}: ${item.score}m${timeString}`;
             listElement.appendChild(li);
         });
     }
@@ -689,20 +551,20 @@ function hideRanking() {
     if (!gameActive && !isPaused) {
         document.getElementById('blocker').style.display = 'block';
         document.getElementById('instructions').style.display = 'flex';
+        document.getElementById('blocker').classList.add('menu-active');
     }
 }
+
 function resetRanking() {
     localStorage.removeItem('OEscaladorRanking');
     showRanking();
 }
 
-// FUNÇÃO DE ANIMAÇÃO 
 function animate() {
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
 
     if (controls.isLocked === true && gameActive) {
-
         const currentTime = time * 0.001;
         for (const obj of movingObjects) {
             const oldX = obj.position.x;
@@ -711,10 +573,7 @@ function animate() {
             obj.deltaX = newX - oldX;
         }
 
-        // ROTAÇÃO DO SKYBOX
-        if (skyboxMesh) {
-            skyboxMesh.rotation.y += 0.005 * delta; // Gira as nuvens lentamente
-        }
+        if (skyboxMesh) skyboxMesh.rotation.y += 0.005 * delta;
 
         raycaster.ray.origin.copy(controls.object.position);
         const intersections = raycaster.intersectObjects(objects, false);
@@ -726,22 +585,13 @@ function animate() {
 
         if (onObject === true) {
             const distance = intersections[0].distance;
-
             if (distance <= playerHeight) {
                 velocity.y = Math.max(0, velocity.y);
-
-                if (velocity.y === 0) {
-                    jumpCount = MAX_JUMPS;
-                }
-
+                if (velocity.y === 0) jumpCount = MAX_JUMPS;
                 const groundObject = intersections[0].object;
                 const groundY = intersections[0].point.y;
-
                 controls.object.position.y = groundY + playerHeight;
-
-                if (groundObject.deltaX !== undefined) {
-                    controls.object.position.x += groundObject.deltaX;
-                }
+                if (groundObject.deltaX !== undefined) controls.object.position.x += groundObject.deltaX;
             }
         }
 
@@ -758,22 +608,13 @@ function animate() {
         const currentHeight = controls.object.position.y;
         if (currentHeight > maxAltitudeScore && currentHeight > playerHeight) {
             maxAltitudeScore = currentHeight;
-            scoreElement.textContent = Math.floor(maxAltitudeScore - playerHeight);
+            if(scoreElement) scoreElement.textContent = Math.floor(maxAltitudeScore - playerHeight);
         }
 
-        if (controls.object.position.y < -50) {
-            respawnPlayer();
-        }
-
-        if (Math.abs(controls.object.position.x) > MAP_BOUNDARY || Math.abs(controls.object.position.z) > MAP_BOUNDARY) {
-            respawnPlayer();
-        }
-
-        if (controls.object.position.y > currentWinHeight) {
-            gameWon();
-        }
+        if (controls.object.position.y < -50) respawnPlayer();
+        if (Math.abs(controls.object.position.x) > MAP_BOUNDARY || Math.abs(controls.object.position.z) > MAP_BOUNDARY) respawnPlayer();
+        if (controls.object.position.y > currentWinHeight) gameWon();
     }
-
     prevTime = time;
     renderer.render(scene, camera);
 }

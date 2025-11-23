@@ -9,44 +9,49 @@
 </head>
 
 <body>
-    <div id="blocker">
-        <div id="instructions" style="display: flex;">
-            <p style="font-size:36px">
-                Only Up Minecraft Edition!
-            </p>
-            <p>
-                Move: WASD<br />
-                Jump: SPACE<br />
-                Look: MOUSE
-            </p>
-            <br>
+    <div id="blocker" class="menu-active">
+        
+        <div id="menuBackground"></div>
+
+        <div id="instructions">
+            <div class="logo-container">
+                <h1 class="game-title">Only Up</h1>
+                <h2 class="game-subtitle">Minecraft Edition</h2>
+            </div>
+
+            <div class="menu-controls">
+                <p>Move: WASD | Jump: SPACE | Look: MOUSE</p>
+            </div>
+            
             <input type="text" id="playerNameInput" placeholder="Digite seu nome" maxlength="15">
 
-            <button id="playButton">Jogar</button>
-            <button id="playButtonFree">Jogar com tempo livre</button>
-            <button id="DificultButton">dificuldade: <span id="difficultyText">FÁCIL</span></button>
-             <button id="rankingButton">Ranking</button>
+            <div class="button-group">
+                <button id="playButton" class="primary-btn">JOGAR</button>
+                <button id="playButtonFree">Modo Livre</button>
+                <button id="DificultButton">Dificuldade: <span id="difficultyText">FÁCIL</span></button>
+                <button id="rankingButton">Ranking</button>
+            </div>
         </div>
 
         <div id="pauseScreen" style="display: none;">
             <p style="font-size:36px">Jogo Pausado</p>
             <button id="resumeButton">Continuar</button>
-            <button id="TelaDeInicioButton">voltar a tela de inicio</button>
+            <button id="TelaDeInicioButton">Voltar ao Menu</button>
         </div>
 
         <div id="gameOverScreen" style="display: none;">
             <h2 id="gameOverMessage" style="font-size:36px;">Game Over</h2>
             <p id="gameOverScore" style="font-size: 24px;"></p>
             <button id="restartButton">Tentar Novamente</button>
-            <button id="TelaDeInicioButton">voltar a tela de inicio</button>
+            <button id="TelaDeInicioButtonGO">Voltar ao Menu</button>
         </div>
     </div>
 
-    <div id="scoreContainer" class="game-hud">
+    <div id="scoreContainer" class="game-hud" style="display: none;">
         Pontuação: <span id="scoreValue">0</span>m
     </div>
 
-    <div id="timerContainer" class="game-hud">
+    <div id="timerContainer" class="game-hud" style="display: none;">
         Tempo: <span id="timerValue">05:00</span>
     </div>
 
@@ -60,14 +65,13 @@
     </div>
 
     <script type="importmap">
-            {
-                "imports": {
-                    "three": "../build/three.module.js",
-                    "three/addons/": "./jsm/"
-                }
+        {
+            "imports": {
+                "three": "../build/three.module.js",
+                "three/addons/": "./jsm/"
             }
-        </script>
+        }
+    </script>
     <script type="module" src="main.js"></script>
 </body>
-
 </html>
