@@ -240,3 +240,52 @@ button:hover {
 .participnates h3{
     font-size: 25px;
 }
+
+/* --- VISÃO MINECRAFT --- */
+
+/* Mira (Crosshair) - Estilo Minecraft pixelado usando box-shadow */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* Centraliza e define o ponto de origem */
+    width: 2px;
+    height: 2px;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    /* Cria a cruz de 1px (2px de largura total) com contorno preto */
+    box-shadow:
+        /* Centro preto */
+        0 0 0 1px black,
+        /* Pontas da cruz (contorno) */
+        -3px 0 0 1px black,
+        3px 0 0 1px black,
+        0 -3px 0 1px black,
+        0 3px 0 1px black,
+        /* Pontas da cruz (branco) */
+        -3px 0 0 white,
+        3px 0 0 white,
+        0 -3px 0 white,
+        0 3px 0 white;
+    pointer-events: none;
+    z-index: 1000;
+    display: none; /* Inicia escondido */
+}
+
+/* Mão do Jogador (Player Hand) - Mão do Steve */
+#playerHand {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 400px;
+    height: 400px;
+    /* CAMINHO CORRIGIDO E RELATIVO */
+
+    background-image: url('/img/player_arm_placeholder.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: 80% bottom;
+    pointer-events: none;
+    z-index: 999;
+    display: none; /* Inicia escondido */
+}
