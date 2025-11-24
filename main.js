@@ -111,34 +111,34 @@ function setupAudio() {
     audioLoader = new THREE.AudioLoader();
 
     backgroundMusic = new THREE.Audio(audioListener);
-    audioLoader.load('./music/background.mp3', function(buffer) {
+    audioLoader.load('../music/background.mp3', function(buffer) {
         backgroundMusic.setBuffer(buffer);
         backgroundMusic.setLoop(true);
         backgroundMusic.setVolume(0.3);
     }, undefined, (err) => console.log('Aviso: Sem música background'));
 
     jumpSound = new THREE.Audio(audioListener);
-    audioLoader.load('./sounds/jump.mp3', function(buffer) {
+    audioLoader.load('../sounds/jump.mp3', function(buffer) {
         jumpSound.setBuffer(buffer);
         jumpSound.setVolume(0.5);
     }, undefined, (err) => console.log('Aviso: Sem som jump'));
 
     imminentDangerMusic = new THREE.Audio(audioListener);
-    audioLoader.load('./sounds/tempo_esgotando.mp3', function(buffer) {
+    audioLoader.load('../sounds/tempo_esgotando.mp3', function(buffer) {
         imminentDangerMusic.setBuffer(buffer);
         imminentDangerMusic.setLoop(true);
         imminentDangerMusic.setVolume(0.4);
     }, undefined, (err) => console.log('Aviso: Sem música perigo'));
 
     victorySound = new THREE.Audio(audioListener);
-    audioLoader.load('./sounds/vitoria.mp3', function(buffer) {
+    audioLoader.load('../sounds/vitoria.mp3', function(buffer) {
         victorySound.setBuffer(buffer);
         victorySound.setLoop(false);
         victorySound.setVolume(0.6);
     }, undefined, (err) => console.log('Aviso: Sem som de vitória'));
 
     defeatSound = new THREE.Audio(audioListener);
-    audioLoader.load('./sounds/derrota.mp3', function(buffer) {
+    audioLoader.load('../sounds/derrota.mp3', function(buffer) {
         defeatSound.setBuffer(buffer);
         defeatSound.setLoop(false);
         defeatSound.setVolume(0.6);
@@ -188,9 +188,9 @@ function setPlayerName() {
 
 function prepareAssets() {
     const textureLoader = new THREE.TextureLoader();
-    const sideTexture = textureLoader.load('./img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
-    const topTexture = textureLoader.load('./img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
-    const bottomTexture = textureLoader.load('./img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
+    const sideTexture = textureLoader.load('../img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
+    const topTexture = textureLoader.load('../img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
+    const bottomTexture = textureLoader.load('../img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
 
     const sideMat = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0xbb8866 });
     const topMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x99ff99 });
@@ -214,7 +214,7 @@ function prepareAssets() {
 
 function createFloor() {
     const textureLoader = new THREE.TextureLoader();
-    const floorTexture = textureLoader.load('./img/minecraftTop.png');
+    const floorTexture = textureLoader.load('../img/minecraftTop.png');
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(500, 500);
