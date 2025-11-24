@@ -6,11 +6,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <link type="text/css" rel="stylesheet" href="main.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 </head>
 
 <body>
+
     <div id="crosshair" style="display: none;"></div>
     <div id="playerHand" style="display: none;"></div>
+
+    <div id="mobileControls" style="display: none;">
+        <div id="joystickContainer"></div>
+        <div id="lookContainer"></div>
+    </div>
 
     <div id="blocker" class="menu-active">
 
@@ -23,7 +31,8 @@
             </div>
 
             <div class="menu-controls">
-                <p>Move: WASD | Jump: SPACE | Look: MOUSE</p>
+                <p>PC: WASD | Jump: SPACE | Look: MOUSE</p>
+                <p>MOBILE: Joystick (Mover) | Look Area (Visão)</p>
             </div>
 
             <input type="text" id="playerNameInput" placeholder="Digite seu nome" maxlength="15">
