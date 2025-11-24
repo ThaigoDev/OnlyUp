@@ -324,8 +324,8 @@ function toggleGameHUD(show) {
 
     if (playerHand) {
         if (isMobile) {
-            playerHand.style.width = '20%';
-            playerHand.style.height = '20%';
+            playerHand.style.width = '40%';
+            playerHand.style.height = '40%';
         } else {
             playerHand.style.width = '400px';
             playerHand.style.height = '400px';
