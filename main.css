@@ -7,6 +7,7 @@ body {
     line-height: 24px;
     overscroll-behavior: none;
     overflow: hidden;
+    cursor: default;
 }
 
 canvas {
@@ -18,7 +19,6 @@ canvas {
     position: absolute;
     width: 100%;
     height: 100%;
-    /* Por padrão é transparente para o pause/gameover */
     background-color: rgba(0, 0, 0, 0.7);
     z-index: 10;
     transition: background-color 0.5s;
@@ -35,7 +35,6 @@ canvas {
     background-size: 64px;
     background-repeat: repeat;
     opacity: 0;
-    /* Invisível durante o jogo */
     z-index: -1;
     transition: opacity 0.5s;
     filter: brightness(0.4);
@@ -61,7 +60,7 @@ canvas {
     }
 }
 
-/* --- ESTILOS DO CONTEÚDO DO MENU --- */
+/* --- ESTILOS DO CONTEÚDO DO MENU (PC) --- */
 #blocker>div {
     width: 100%;
     height: 100%;
@@ -73,7 +72,7 @@ canvas {
     color: #ffffff;
 }
 
-/* --- TÍTULOS (CORRIGIDO) --- */
+/* --- TÍTULOS (PC) --- */
 .logo-container {
     margin-bottom: 40px;
     text-shadow: 4px 4px 0px #000;
@@ -81,7 +80,6 @@ canvas {
     flex-direction: column;
     align-items: center;
     gap: 5px;
-    /* Espaço entre os textos */
 }
 
 .game-title {
@@ -90,8 +88,6 @@ canvas {
     line-height: 1.1;
     font-weight: 900;
     letter-spacing: 2px;
-    color: #fff;
-    z-index: 1;
 }
 
 .game-subtitle {
@@ -108,7 +104,7 @@ canvas {
     margin-bottom: 20px;
 }
 
-/* Input */
+/* Input (PC) */
 #playerNameInput {
     padding: 15px;
     font-size: 18px;
@@ -121,7 +117,7 @@ canvas {
     font-weight: bold;
 }
 
-/* Botões */
+/* Botões (PC) */
 .button-group {
     display: flex;
     flex-direction: column;
@@ -170,7 +166,6 @@ button:hover {
     text-shadow: 2px 2px 4px #000000;
     z-index: 1000;
     display: none;
-    /* Oculto no menu inicial */
 }
 
 #scoreContainer {
@@ -215,19 +210,18 @@ button:hover {
 #creditsBtn {
     position: absolute;
     right: 20px;
-    /* Alinha à direita */
     bottom: 20px;
-    /* Alinha embaixo */
     z-index: 5;
     width: auto;
-    /* Ajusta a largura ao conteúdo */
     padding: 10px 15px;
     font-size: 14px;
     text-transform: none;
 }
 
-#creditsBtn:hover {
-    transform: scale(1.05);
+button:hover#creditsBtn {
+    background: #fff;
+    color: #000;
+    transform: none;
 }
 
 .participnates {
@@ -241,51 +235,139 @@ button:hover {
     font-size: 25px;
 }
 
-/* --- VISÃO MINECRAFT --- */
+/* --- VISÃO MINECRAFT (MÃO E MIRA) --- */
 
-/* Mira (Crosshair) - Estilo Minecraft pixelado usando box-shadow */
+/* Mira (Crosshair) */
 #crosshair {
     position: absolute;
     top: 50%;
     left: 50%;
-    /* Centraliza e define o ponto de origem */
     width: 2px;
     height: 2px;
     transform: translate(-50%, -50%);
     background-color: white;
-    /* Cria a cruz de 1px (2px de largura total) com contorno preto */
     box-shadow:
-        /* Centro preto */
         0 0 0 1px black,
-        /* Pontas da cruz (contorno) */
         -3px 0 0 1px black,
         3px 0 0 1px black,
         0 -3px 0 1px black,
         0 3px 0 1px black,
-        /* Pontas da cruz (branco) */
         -3px 0 0 white,
         3px 0 0 white,
         0 -3px 0 white,
         0 3px 0 white;
     pointer-events: none;
     z-index: 1000;
-    display: none; /* Inicia escondido */
+    display: none;
 }
 
-/* Mão do Jogador (Player Hand) - Mão do Steve */
+/* Mão do Jogador: Tamanho definido via JS */
 #playerHand {
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 400px;
-    height: 400px;
-    /* CAMINHO CORRIGIDO E RELATIVO */
-
-    background-image: url('/img/player_arm_placeholder.png');
+    background-image: url('img/player_arm_placeholder.png');
     background-size: contain;
     background-repeat: no-repeat;
-    background-position: 80% bottom;
+    background-position: 95% bottom;
     pointer-events: none;
     z-index: 999;
-    display: none; /* Inicia escondido */
+    display: none;
+}
+
+/* --- CONTROLES MOBILE --- */
+
+/* Contêiner principal para os controles mobile */
+#mobileControls {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 50;
+}
+
+/* Joystick para Movimento (Canto Inferior Esquerdo) */
+#joystickContainer {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 120px;
+    height: 120px;
+    opacity: 0.8;
+    z-index: 55;
+}
+
+/* Look Area (Canto Direito) */
+#lookContainer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 60%;
+    height: 100%;
+    background: transparent;
+    z-index: 52;
+}
+
+/* ======================================================= */
+/* MEDIA QUERY: CORREÇÃO DA TELA INICIAL PARA MOBILE HORIZONTAL (LANDSCAPE) */
+/* ======================================================= */
+@media (max-width: 800px) and (orientation: landscape) {
+
+    /* 1. Força o uso da altura total da tela */
+    #blocker {
+        height: 100vh;
+    }
+
+    /* 2. Ajusta o contêiner de instruções para usar todo o espaço vertical */
+    #instructions {
+        justify-content: flex-start; /* Alinha os itens ao topo para caber tudo */
+        padding: 2vh 5vw; /* Padding responsivo reduzido */
+        height: 100vh;
+        box-sizing: border-box;
+        overflow-y: auto; /* Permite rolagem se for absolutamente necessário */
+    }
+
+    /* 3. Reduz o tamanho da fonte e margens dos elementos do menu */
+    .logo-container {
+        margin-bottom: 5px;
+    }
+
+    .game-title {
+        font-size: 35px; /* Redução máxima do título */
+    }
+
+    .game-subtitle {
+        font-size: 18px;
+    }
+
+    .menu-controls {
+        font-size: 10px;
+        padding: 5px 10px;
+        margin-bottom: 5px;
+    }
+
+    /* Input e Botões */
+    .button-group, #playerNameInput {
+        width: 200px; /* Reduz largura */
+        margin-bottom: 5px;
+    }
+
+    /* Botões: Reduz o padding e a fonte para caber na tela */
+    button {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    /* Input text */
+    #playerNameInput {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+
+    /* Botão de créditos no canto */
+    #creditsBtn {
+        bottom: 0px;
+        right: 0px;
+        padding: 4px 8px;
+        font-size: 10px;
+    }
 }

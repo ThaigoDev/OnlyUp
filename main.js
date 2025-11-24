@@ -1,14 +1,26 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+// REMOVIDO: import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-let camera, scene, renderer, controls;
+// --- VARIÁVEIS GLOBAIS DE CONTROLE MOBILE ---
+let isMobile = /Mobi|Android/i.test(navigator.userAgent);
+let joystick;
+
+// VARIÁVEIS DE ROTAÇÃO DA CÂMERA
+const PI_2 = Math.PI / 2;
+let lon = 0, lat = 0;
+const rotationSpeed = 0.005;
+
+// VARIÁVEIS DE CONTROLE PC/MOUSE
+let isCursorLocked = false;
+
+let camera, scene, renderer;
 const objects = [];
 const movingObjects = [];
 let raycaster;
 let scoreElement, timerElement;
 let skyboxMesh;
 
-// Variáveis globais de materiais e geometrias para reuso na geração de nível
+// Variáveis globais de materiais e geometrias
 let geometries = [];
 let materialsList = [];
 
@@ -45,11 +57,29 @@ const playerHeight = 10.0;
 // Variáveis de som
 let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, victorySound, defeatSound, audioLoader;
 
+// --- Objeto controls adaptado para simular o PointerLockControls ---
+const controls = {
+    isLocked: false,
+    object: null,
+    moveRight: function(distance) {},
+    moveForward: function(distance) {},
+    lock: function() {
+        if (!isMobile) isCursorLocked = true;
+        onControlsLock();
+    },
+    unlock: function() {
+        if (!isMobile) isCursorLocked = false;
+        onControlsUnlock();
+    }
+};
+
 init();
 
 function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
     camera.position.y = playerHeight;
+    camera.rotation.order = 'YXZ';
+    controls.object = camera;
 
     scene = new THREE.Scene();
 
@@ -73,7 +103,13 @@ function init() {
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
 
-    controls = new PointerLockControls(camera, document.body);
+    // CONTROLES: Setup para Mobile/PC
+    if (isMobile) {
+        setupMobileControls();
+    } else {
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('click', onPCControlsLock);
+    }
 
     // --- ÁUDIO ---
     setupAudio();
@@ -81,7 +117,6 @@ function init() {
     // --- UI ---
     setupUI();
 
-    // --- OBJETOS 3D BASE ---
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, playerHeight + 0.1);
 
     // Preparar Materiais e Geometrias
@@ -104,6 +139,111 @@ function init() {
     updateTimerDisplay();
     document.getElementById('blocker').classList.add('menu-active');
 }
+
+function setPlayerName() {
+    const input = document.getElementById('playerNameInput');
+    playerName = (input && input.value.trim() !== '') ? input.value.trim() : 'Jogador';
+}
+
+function startGameSetup() {
+    if (audioListener.context.state === 'suspended') {
+        audioListener.context.resume();
+    }
+    controls.lock();
+}
+
+// =========================================================================
+// NOVAS FUNÇÕES DE CONTROLE (MOBILE/PC)
+// =========================================================================
+
+function setupMobileControls() {
+    // Configuração do Joystick para Movimento (nipplejs)
+    joystick = nipplejs.create({
+        zone: document.getElementById('joystickContainer'),
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'white',
+        restOpacity: 0.5,
+        lockX: false,
+        lockY: false
+    });
+
+    joystick.on('move', function (evt, data) {
+        moveForward = moveBackward = moveLeft = moveRight = false;
+
+        if (data.force > 0.1) {
+            const angleDeg = data.angle.degree;
+
+            if (angleDeg > 45 && angleDeg <= 135) { // Frente
+                moveForward = true;
+            } else if (angleDeg > 225 && angleDeg <= 315) { // Trás
+                moveBackward = true;
+            } else if (angleDeg > 135 && angleDeg <= 225) { // Esquerda
+                moveLeft = true;
+            } else if (angleDeg > 315 || angleDeg <= 45) { // Direita
+                moveRight = true;
+            }
+        }
+    }).on('end', function () {
+        moveForward = moveBackward = moveLeft = moveRight = false;
+    });
+
+    // Rotação da Câmera (Look Touch)
+    const lookContainer = document.getElementById('lookContainer');
+    let lastX = 0, lastY = 0;
+    const sensibility = 0.5; // Ajuste de sensibilidade do look touch
+
+    lookContainer.addEventListener('touchstart', (event) => {
+        if (!gameActive) return;
+        event.preventDefault(); // Evita scroll da página
+        lastX = event.touches[0].pageX;
+        lastY = event.touches[0].pageY;
+    }, { passive: false });
+
+    lookContainer.addEventListener('touchmove', (event) => {
+        if (!gameActive) return;
+        event.preventDefault();
+        const touch = event.touches[0];
+        const deltaX = touch.pageX - lastX;
+        const deltaY = touch.pageY - lastY;
+
+        // CORREÇÃO (Horizontal): Movimento normal (arrastar para direita aumenta lon)
+        lon += deltaX * sensibility; // SINAL POSITIVO AJUSTADO
+        lat -= deltaY * sensibility; // Vertical (já está correto)
+
+        // lat = Math.max(-85, Math.min(85, lat)); // REMOVIDO: Permitir 360 Vertical
+
+        lastX = touch.pageX;
+        lastY = touch.pageY;
+    }, { passive: false });
+}
+
+function onPCControlsLock() {
+    if (!gameActive || isMobile) return;
+
+    const blocker = document.getElementById('blocker');
+
+    if (blocker.style.display !== 'none') {
+        controls.lock();
+    }
+}
+
+function onMouseMove(event) {
+    if (!gameActive || isMobile || !isCursorLocked) return;
+
+    // CORREÇÃO FINAL (Horizontal): SINAL NEGATIVO (-)
+    // Se arrastar para a direita (movementX > 0) e a câmera estiver invertida,
+    // o sinal negativo corrige isso.
+    lon -= event.movementX * 0.1;
+    lat -= event.movementY * 0.1;
+
+    // lat = Math.max(-85, Math.min(85, lat)); // REMOVIDO: Permitir 360 Vertical
+}
+
+
+// =========================================================================
+// FUNÇÕES DE JOGO (RESTANTE DO CÓDIGO)
+// =========================================================================
 
 function setupAudio() {
     audioListener = new THREE.AudioListener();
@@ -154,10 +294,14 @@ function setupUI() {
     if (diffEl) difficultyElement = diffEl;
 
     document.getElementById('playButton').addEventListener('click', () => {
-        setPlayerName(); freeMode = false; startGameSetup();
+        setPlayerName();
+        freeMode = false;
+        startGameSetup();
     });
     document.getElementById('playButtonFree').addEventListener('click', () => {
-        setPlayerName(); freeMode = true; startGameSetup();
+        setPlayerName();
+        freeMode = true;
+        startGameSetup();
     });
     document.getElementById('rankingButton').addEventListener('click', (e) => { e.stopPropagation(); showRanking(); });
     document.getElementById('resumeButton').addEventListener('click', () => controls.lock());
@@ -174,16 +318,409 @@ function setupUI() {
     });
     document.getElementById('DificultButton').addEventListener('click', toggleDifficulty);
 
-    controls.addEventListener('lock', onControlsLock);
-    controls.addEventListener('unlock', onControlsUnlock);
+    // Lógica para destravar o mouse no PC
+    document.addEventListener('keydown', (event) => {
+        if (event.code === 'Escape' && controls.isLocked) {
+            controls.unlock();
+        }
+    });
 
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
 }
 
-function setPlayerName() {
-    const input = document.getElementById('playerNameInput');
-    playerName = (input && input.value.trim() !== '') ? input.value.trim() : 'Jogador';
+function toggleGameHUD(show) {
+    const display = show ? 'block' : 'none';
+    const playerHand = document.getElementById('playerHand');
+    const crosshair = document.getElementById('crosshair');
+    const mobileControls = document.getElementById('mobileControls');
+
+    // 1. TAMANHO DA MÃO (PROPORCIONAL E CORRIGIDO)
+    if (playerHand) {
+        if (isMobile) {
+            // Mobile: 20% da largura da tela (tamanho ideal)
+            playerHand.style.width = '20%';
+            playerHand.style.height = '20%';
+        } else {
+            // PC: 400px (tamanho fixo solicitado)
+            playerHand.style.width = '400px';
+            playerHand.style.height = '400px';
+        }
+        playerHand.style.display = display;
+    }
+
+    // MIRA: Esconder mira no mobile, só mostrar em PC
+    if (crosshair) crosshair.style.display = (!isMobile && show) ? display : 'none';
+
+    // Mostra/Esconde os controles móveis
+    if (mobileControls) mobileControls.style.display = (isMobile && show) ? 'block' : 'none';
+
+    // CURSOR PC: Esconder cursor do mouse (PC) quando o jogo está ativo
+    document.body.style.cursor = (!isMobile && show) ? 'none' : 'default';
+}
+
+function onControlsLock() {
+    document.getElementById('blocker').style.display = 'none';
+    document.getElementById('instructions').style.display = 'none';
+    document.getElementById('pauseScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('rankingOverlay').style.display = 'none';
+
+    document.getElementById('scoreContainer').style.display = 'block';
+    document.getElementById('timerContainer').style.display = 'block';
+    document.getElementById('blocker').classList.remove('menu-active');
+
+    toggleGameHUD(true);
+
+    if (isPaused) {
+        isPaused = false;
+        resumeGame();
+    } else if (!gameActive) {
+        startGame();
+    }
+    controls.isLocked = true;
+}
+
+function onControlsUnlock() {
+    document.getElementById('blocker').style.display = 'block';
+
+    toggleGameHUD(false);
+
+    if (gameActive) {
+        gameActive = false;
+        isPaused = true;
+        clearInterval(timerInterval);
+        document.getElementById('pauseScreen').style.display = 'flex';
+    } else {
+        isPaused = false;
+        if (document.getElementById('gameOverScreen').style.display === 'none' && document.getElementById('rankingOverlay').style.display === 'none') {
+            document.getElementById('instructions').style.display = 'flex';
+            document.getElementById('blocker').classList.add('menu-active');
+            document.getElementById('scoreContainer').style.display = 'none';
+            document.getElementById('timerContainer').style.display = 'none';
+        }
+    }
+    controls.isLocked = false;
+}
+
+function onKeyDown(event) {
+    if (isMobile) return;
+
+    switch (event.code) {
+        case 'ArrowUp': case 'KeyW': moveForward = true; break;
+        case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+        case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+        case 'ArrowRight': case 'KeyD': moveRight = true; break;
+        case 'Space':
+            if (jumpCount > 0 && gameActive) {
+                velocity.y = 250;
+                jumpCount--;
+                if (jumpSound && jumpSound.buffer) {
+                    if (jumpSound.isPlaying) jumpSound.stop();
+                    jumpSound.play();
+                }
+            }
+            break;
+    }
+}
+
+function onKeyUp(event) {
+    if (isMobile) return;
+
+    switch (event.code) {
+        case 'ArrowUp': case 'KeyW': moveForward = false; break;
+        case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+        case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+        case 'ArrowRight': case 'KeyD': moveRight = false; break;
+    }
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function respawnPlayer() {
+    controls.object.position.set(0, playerHeight, 0);
+    velocity.set(0, 0, 0);
+    jumpCount = 0;
+}
+
+function toggleDifficulty() {
+    const difficulties = ['EASY', 'NORMAL', 'HARD'];
+    const nextIndex = (difficulties.indexOf(currentDifficulty) + 1) % difficulties.length;
+    currentDifficulty = difficulties[nextIndex];
+    const settings = difficultySettings[currentDifficulty];
+
+    currentWinHeight = settings.height;
+    initialGameTime = settings.time;
+
+    if (difficultyElement) difficultyElement.textContent = settings.text;
+
+    generateLevel(currentWinHeight);
+
+    if (!gameActive) respawnPlayer();
+}
+
+function startGame() {
+    gameActive = true;
+    isPaused = false;
+    if (!freeMode) {
+        gameTime = initialGameTime;
+        timerInterval = setInterval(updateTimer, 1000);
+        updateTimerDisplay();
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
+    } else {
+        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        timerElement.textContent = 'LIVRE';
+        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
+    }
+    maxAltitudeScore = 0;
+    scoreElement.textContent = '0';
+    respawnPlayer();
+}
+
+function returnToMenu() {
+    gameActive = false;
+    isPaused = false;
+    freeMode = false;
+    clearInterval(timerInterval);
+
+    if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+    if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+    if (victorySound && victorySound.isPlaying) victorySound.stop();
+    if (defeatSound && defeatSound.isPlaying) defeatSound.stop();
+
+    respawnPlayer();
+    controls.unlock();
+
+    toggleGameHUD(false);
+
+    document.getElementById('pauseScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('rankingOverlay').style.display = 'none';
+    document.getElementById('blocker').style.display = 'block';
+    document.getElementById('instructions').style.display = 'flex';
+
+    document.getElementById('blocker').classList.add('menu-active');
+    document.getElementById('scoreContainer').style.display = 'none';
+    document.getElementById('timerContainer').style.display = 'none';
+}
+
+function resumeGame() {
+    gameActive = true;
+    isPaused = false;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(updateTimer, 1000);
+    const DANGER_THRESHOLD = 45;
+    if (gameTime <= DANGER_THRESHOLD) {
+        if (backgroundMusic) backgroundMusic.stop();
+        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
+    } else {
+        if (imminentDangerMusic) imminentDangerMusic.stop();
+        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
+    }
+}
+
+function updateTimer() {
+    if (!gameActive || freeMode) { clearInterval(timerInterval); return; }
+    gameTime--;
+    updateTimerDisplay();
+
+    if (gameTime <= 0) {
+        gameOver('O tempo acabou e você não concluiu a escalada!');
+        if (backgroundMusic) backgroundMusic.stop();
+        if (imminentDangerMusic) imminentDangerMusic.stop();
+        return;
+    }
+    if (gameTime === 45) {
+        if (backgroundMusic) backgroundMusic.stop();
+        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
+    }
+}
+
+function updateTimerDisplay() {
+    const minutes = Math.floor(gameTime / 60);
+    const seconds = gameTime % 60;
+    if (timerElement) timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function gameOver(message) {
+    gameActive = false;
+    isPaused = false;
+    clearInterval(timerInterval);
+    finalScore = Math.floor(maxAltitudeScore - playerHeight);
+    if(scoreElement) scoreElement.textContent = finalScore;
+    saveScore(finalScore, null, false);
+
+    if (defeatSound && defeatSound.buffer) {
+        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (victorySound && victorySound.isPlaying) victorySound.stop();
+
+        if (defeatSound.isPlaying) defeatSound.stop();
+    }
+
+    controls.unlock();
+    toggleGameHUD(false);
+
+    document.getElementById('gameOverMessage').textContent = message;
+    document.getElementById('gameOverScore').textContent = `Pontuação Final: ${finalScore}m`;
+    document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+function gameWon() {
+    gameActive = false;
+    isPaused = false;
+    clearInterval(timerInterval);
+    maxAltitudeScore = controls.object.position.y;
+    finalScore = Math.floor(maxAltitudeScore - playerHeight);
+    if(scoreElement) scoreElement.textContent = finalScore;
+    const elapsedTime = initialGameTime - gameTime;
+    saveScore(finalScore, elapsedTime, true);
+
+    if (victorySound && victorySound.buffer) {
+        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (victorySound.isPlaying) victorySound.stop();
+        victorySound.play();
+    }
+
+    controls.unlock();
+    toggleGameHUD(false);
+
+    document.getElementById('gameOverMessage').textContent = 'VOCÊ VENCEU!';
+    document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo: ${formatTime(elapsedTime)}`;
+    document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+function formatTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function saveScore(score, time, isWin = false) {
+    const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
+    ranking.push({ name: playerName, score: score, time: time });
+    ranking.sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        if (a.time === null) return 1;
+        if (b.time === null) return -1;
+        return a.time - b.time;
+    });
+    localStorage.setItem('OEscaladorRanking', JSON.stringify(ranking.slice(0, 10)));
+}
+
+function showRanking() {
+    const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
+    const listElement = document.getElementById('rankingList');
+    listElement.innerHTML = '';
+    if (ranking.length === 0) {
+        listElement.innerHTML = '<li>Nenhuma pontuação registrada.</li>';
+    } else {
+        ranking.forEach((item) => {
+            const li = document.createElement('li');
+            let timeString = item.time !== null ? ` (em ${formatTime(item.time)})` : "";
+            li.textContent = `${item.name}: ${item.score}m${timeString}`;
+        });
+    }
+    document.getElementById('rankingOverlay').style.display = 'flex';
+}
+
+function hideRanking() {
+    document.getElementById('rankingOverlay').style.display = 'none';
+    if (!gameActive && !isPaused) {
+        document.getElementById('blocker').style.display = 'block';
+        document.getElementById('instructions').style.display = 'flex';
+        document.getElementById('blocker').classList.add('menu-active');
+    }
+}
+
+function resetRanking() {
+    localStorage.removeItem('OEscaladorRanking');
+    showRanking();
+}
+
+function animate() {
+    const time = performance.now();
+    const delta = (time - prevTime) / 1000;
+
+    if (controls.isLocked === true && gameActive) {
+
+        // --- ATUALIZAÇÃO DA ROTAÇÃO DA CÂMERA (Mobile e PC) ---
+        const phi = THREE.MathUtils.degToRad(90 - lat);
+        const theta = THREE.MathUtils.degToRad(lon);
+
+        camera.rotation.y = theta;
+        camera.rotation.x = PI_2 - phi;
+
+        const currentTime = time * 0.001;
+        for (const obj of movingObjects) {
+            const oldX = obj.position.x;
+            const newX = obj.initialX + (Math.sin(currentTime + obj.position.y) * 15);
+            obj.position.x = newX;
+            obj.deltaX = newX - oldX;
+        }
+
+        if (skyboxMesh) skyboxMesh.rotation.y += 0.005 * delta;
+
+        raycaster.ray.origin.copy(controls.object.position);
+        const intersections = raycaster.intersectObjects(objects, false);
+        const onObject = intersections.length > 0;
+
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+        velocity.y -= 9.8 * 100.0 * delta;
+
+        if (onObject === true) {
+            const distance = intersections[0].distance;
+            if (distance <= playerHeight) {
+                velocity.y = Math.max(0, velocity.y);
+                if (velocity.y === 0) jumpCount = MAX_JUMPS;
+                const groundObject = intersections[0].object;
+                const groundY = intersections[0].point.y;
+                controls.object.position.y = groundY + playerHeight;
+                if (groundObject.deltaX !== undefined) controls.object.position.x += groundObject.deltaX;
+            }
+        }
+
+        // --- MOVIMENTO (TECLADO/JOYSTICK) ---
+
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.normalize();
+
+        const ACCELERATION = 400.0 * delta;
+
+        if (moveForward || moveBackward) velocity.z += direction.z * ACCELERATION;
+        if (moveLeft || moveRight) velocity.x += direction.x * ACCELERATION;
+
+        // Vetor de direção (Corrigido para WASD)
+        const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+
+        // Movimento (adiciona ao vetor de posição)
+        camera.position.addScaledVector(forwardVector, velocity.z * delta);
+        camera.position.addScaledVector(rightVector, velocity.x * delta);
+
+        camera.position.y += (velocity.y * delta);
+
+        const currentHeight = camera.position.y;
+        if (currentHeight > maxAltitudeScore && currentHeight > playerHeight) {
+            maxAltitudeScore = currentHeight;
+            if(scoreElement) scoreElement.textContent = Math.floor(maxAltitudeScore - playerHeight);
+        }
+
+        if (camera.position.y < -50) respawnPlayer();
+        if (Math.abs(camera.position.x) > MAP_BOUNDARY || Math.abs(camera.position.z) > MAP_BOUNDARY) respawnPlayer();
+        if (camera.position.y > currentWinHeight) gameWon();
+    }
+    prevTime = time;
+    renderer.render(scene, camera);
 }
 
 function prepareAssets() {
@@ -228,7 +765,6 @@ function createFloor() {
     objects.push(floor);
 }
 
-// --- GERAÇÃO DE NÍVEL (COM ANTICOLISÃO) ---
 function generateLevel(maxHeight) {
     for (let i = objects.length - 1; i > 0; i--) {
         const obj = objects[i];
@@ -333,370 +869,4 @@ function generateLevel(maxHeight) {
     winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
     winBoxMesh.position.set(0, maxHeight + 2.5, 0);
     scene.add(winBoxMesh);
-}
-
-function startGameSetup() {
-    if (audioListener.context.state === 'suspended') {
-        audioListener.context.resume();
-    }
-    controls.lock();
-}
-
-/**
- * Função para alternar a visibilidade da Mira e da Mão (HUD de primeira pessoa)
- * @param {boolean} show - Se deve mostrar (true) ou esconder (false)
- */
-function toggleGameHUD(show) {
-    const display = show ? 'block' : 'none';
-    const crosshair = document.getElementById('crosshair');
-    const playerHand = document.getElementById('playerHand');
-    if (crosshair) crosshair.style.display = display;
-    if (playerHand) playerHand.style.display = display;
-}
-
-function onControlsLock() {
-    document.getElementById('blocker').style.display = 'none';
-    document.getElementById('instructions').style.display = 'none';
-    document.getElementById('pauseScreen').style.display = 'none';
-    document.getElementById('gameOverScreen').style.display = 'none';
-    document.getElementById('rankingOverlay').style.display = 'none';
-
-    document.getElementById('scoreContainer').style.display = 'block';
-    document.getElementById('timerContainer').style.display = 'block';
-    document.getElementById('blocker').classList.remove('menu-active');
-   
-    // MOSTRAR A MIRA E A MÃO
-    toggleGameHUD(true);
-
-    if (isPaused) {
-        isPaused = false;
-        resumeGame();
-    } else if (!gameActive) {
-        startGame();
-    }
-}
-
-function onControlsUnlock() {
-    document.getElementById('blocker').style.display = 'block';
-
-    // ESCONDER A MIRA E A MÃO
-    toggleGameHUD(false);
-
-    if (gameActive) {
-        gameActive = false;
-        isPaused = true;
-        clearInterval(timerInterval);
-        document.getElementById('pauseScreen').style.display = 'flex';
-    } else {
-        isPaused = false;
-        if (document.getElementById('gameOverScreen').style.display === 'none' && document.getElementById('rankingOverlay').style.display === 'none') {
-            document.getElementById('instructions').style.display = 'flex';
-            document.getElementById('blocker').classList.add('menu-active');
-            document.getElementById('scoreContainer').style.display = 'none';
-            document.getElementById('timerContainer').style.display = 'none';
-        }
-    }
-}
-
-function onKeyDown(event) {
-    switch (event.code) {
-        case 'ArrowUp': case 'KeyW': moveForward = true; break;
-        case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
-        case 'ArrowDown': case 'KeyS': moveBackward = true; break;
-        case 'ArrowRight': case 'KeyD': moveRight = true; break;
-        case 'Space':
-            if (jumpCount > 0 && gameActive) {
-                velocity.y = 250;
-                jumpCount--;
-                if (jumpSound && jumpSound.buffer) {
-                    if (jumpSound.isPlaying) jumpSound.stop();
-                    jumpSound.play();
-                }
-            }
-            break;
-    }
-}
-
-function onKeyUp(event) {
-    switch (event.code) {
-        case 'ArrowUp': case 'KeyW': moveForward = false; break;
-        case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
-        case 'ArrowDown': case 'KeyS': moveBackward = false; break;
-        case 'ArrowRight': case 'KeyD': moveRight = false; break;
-    }
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function respawnPlayer() {
-    controls.object.position.set(0, playerHeight, 0);
-    velocity.set(0, 0, 0);
-    jumpCount = 0;
-}
-
-function toggleDifficulty() {
-    const difficulties = ['EASY', 'NORMAL', 'HARD'];
-    const nextIndex = (difficulties.indexOf(currentDifficulty) + 1) % difficulties.length;
-    currentDifficulty = difficulties[nextIndex];
-    const settings = difficultySettings[currentDifficulty];
-
-    currentWinHeight = settings.height;
-    initialGameTime = settings.time;
-
-    if (difficultyElement) difficultyElement.textContent = settings.text;
-
-    generateLevel(currentWinHeight);
-
-    if (!gameActive) respawnPlayer();
-}
-
-function startGame() {
-    gameActive = true;
-    isPaused = false;
-    if (!freeMode) {
-        gameTime = initialGameTime;
-        timerInterval = setInterval(updateTimer, 1000);
-        updateTimerDisplay();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
-        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
-    } else {
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
-        timerElement.textContent = 'LIVRE';
-        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
-    }
-    maxAltitudeScore = 0;
-    scoreElement.textContent = '0';
-    respawnPlayer();
-}
-
-function returnToMenu() {
-    gameActive = false;
-    isPaused = false;
-    freeMode = false;
-    clearInterval(timerInterval);
-
-    if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-    if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
-    if (victorySound && victorySound.isPlaying) victorySound.stop();
-    if (defeatSound && defeatSound.isPlaying) defeatSound.stop();
-
-    respawnPlayer();
-    controls.unlock();
-
-    // ESCONDER A MIRA E A MÃO
-    toggleGameHUD(false);
-
-    document.getElementById('pauseScreen').style.display = 'none';
-    document.getElementById('gameOverScreen').style.display = 'none';
-    document.getElementById('rankingOverlay').style.display = 'none';
-    document.getElementById('blocker').style.display = 'block';
-    document.getElementById('instructions').style.display = 'flex';
-
-    document.getElementById('blocker').classList.add('menu-active');
-    document.getElementById('scoreContainer').style.display = 'none';
-    document.getElementById('timerContainer').style.display = 'none';
-}
-
-function resumeGame() {
-    gameActive = true;
-    isPaused = false;
-    clearInterval(timerInterval);
-    timerInterval = setInterval(updateTimer, 1000);
-    const DANGER_THRESHOLD = 45;
-    if (gameTime <= DANGER_THRESHOLD) {
-        if (backgroundMusic) backgroundMusic.stop();
-        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
-    } else {
-        if (imminentDangerMusic) imminentDangerMusic.stop();
-        if (backgroundMusic && !backgroundMusic.isPlaying) backgroundMusic.play();
-    }
-}
-
-function updateTimer() {
-    if (!gameActive || freeMode) { clearInterval(timerInterval); return; }
-    gameTime--;
-    updateTimerDisplay();
-
-    if (gameTime <= 0) {
-        gameOver('O tempo acabou e você não concluiu a escalada!');
-        if (backgroundMusic) backgroundMusic.stop();
-        if (imminentDangerMusic) imminentDangerMusic.stop();
-        return;
-    }
-    if (gameTime === 45) {
-        if (backgroundMusic) backgroundMusic.stop();
-        if (imminentDangerMusic && !imminentDangerMusic.isPlaying) imminentDangerMusic.play();
-    }
-}
-
-function updateTimerDisplay() {
-    const minutes = Math.floor(gameTime / 60);
-    const seconds = gameTime % 60;
-    if (timerElement) timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function gameOver(message) {
-    gameActive = false;
-    isPaused = false;
-    clearInterval(timerInterval);
-    finalScore = Math.floor(maxAltitudeScore - playerHeight);
-    if(scoreElement) scoreElement.textContent = finalScore;
-    saveScore(finalScore, null, false);
-
-    // Toca som de derrota
-    if (defeatSound && defeatSound.buffer) {
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
-        if (victorySound && victorySound.isPlaying) victorySound.stop();
-
-        if (defeatSound.isPlaying) defeatSound.stop();
-        defeatSound.play();
-    }
-
-    controls.unlock();
-    // ESCONDER A MIRA E A MÃO
-    toggleGameHUD(false);
-
-    document.getElementById('gameOverMessage').textContent = message;
-    document.getElementById('gameOverScore').textContent = `Pontuação Final: ${finalScore}m`;
-    document.getElementById('gameOverScreen').style.display = 'flex';
-}
-
-function gameWon() {
-    gameActive = false;
-    isPaused = false;
-    clearInterval(timerInterval);
-    maxAltitudeScore = controls.object.position.y;
-    finalScore = Math.floor(maxAltitudeScore - playerHeight);
-    if(scoreElement) scoreElement.textContent = finalScore;
-    const elapsedTime = initialGameTime - gameTime;
-    saveScore(finalScore, elapsedTime, true);
-
-    if (victorySound && victorySound.buffer) {
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
-        if (victorySound.isPlaying) victorySound.stop();
-        victorySound.play();
-    }
-
-    controls.unlock();
-    // ESCONDER A MIRA E A MÃO
-    toggleGameHUD(false);
-
-    document.getElementById('gameOverMessage').textContent = 'VOCÊ VENCEU!';
-    document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo: ${formatTime(elapsedTime)}`;
-    document.getElementById('gameOverScreen').style.display = 'flex';
-}
-
-function formatTime(totalSeconds) {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function saveScore(score, time, isWin = false) {
-    const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
-    ranking.push({ name: playerName, score: score, time: time });
-    ranking.sort((a, b) => {
-        if (a.score !== b.score) return b.score - a.score;
-        if (a.time === null) return 1;
-        if (b.time === null) return -1;
-        return a.time - b.time;
-    });
-    localStorage.setItem('OEscaladorRanking', JSON.stringify(ranking.slice(0, 10)));
-}
-
-function showRanking() {
-    const ranking = JSON.parse(localStorage.getItem('OEscaladorRanking')) || [];
-    const listElement = document.getElementById('rankingList');
-    listElement.innerHTML = '';
-    if (ranking.length === 0) {
-        listElement.innerHTML = '<li>Nenhuma pontuação registrada.</li>';
-    } else {
-        ranking.forEach((item) => {
-            const li = document.createElement('li');
-            let timeString = item.time !== null ? ` (em ${formatTime(item.time)})` : "";
-            li.textContent = `${item.name}: ${item.score}m${timeString}`;
-            listElement.appendChild(li);
-        });
-    }
-    document.getElementById('rankingOverlay').style.display = 'flex';
-}
-
-function hideRanking() {
-    document.getElementById('rankingOverlay').style.display = 'none';
-    if (!gameActive && !isPaused) {
-        document.getElementById('blocker').style.display = 'block';
-        document.getElementById('instructions').style.display = 'flex';
-        document.getElementById('blocker').classList.add('menu-active');
-    }
-}
-
-function resetRanking() {
-    localStorage.removeItem('OEscaladorRanking');
-    showRanking();
-}
-
-function animate() {
-    const time = performance.now();
-    const delta = (time - prevTime) / 1000;
-
-    if (controls.isLocked === true && gameActive) {
-        const currentTime = time * 0.001;
-        for (const obj of movingObjects) {
-            const oldX = obj.position.x;
-            const newX = obj.initialX + (Math.sin(currentTime + obj.position.y) * 15);
-            obj.position.x = newX;
-            obj.deltaX = newX - oldX;
-        }
-
-        if (skyboxMesh) skyboxMesh.rotation.y += 0.005 * delta;
-
-        raycaster.ray.origin.copy(controls.object.position);
-        const intersections = raycaster.intersectObjects(objects, false);
-        const onObject = intersections.length > 0;
-
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
-        velocity.y -= 9.8 * 100.0 * delta;
-
-        if (onObject === true) {
-            const distance = intersections[0].distance;
-            if (distance <= playerHeight) {
-                velocity.y = Math.max(0, velocity.y);
-                if (velocity.y === 0) jumpCount = MAX_JUMPS;
-                const groundObject = intersections[0].object;
-                const groundY = intersections[0].point.y;
-                controls.object.position.y = groundY + playerHeight;
-                if (groundObject.deltaX !== undefined) controls.object.position.x += groundObject.deltaX;
-            }
-        }
-
-        direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize();
-        if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-        if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
-
-        controls.moveRight(-velocity.x * delta);
-        controls.moveForward(-velocity.z * delta);
-        controls.object.position.y += (velocity.y * delta);
-
-        const currentHeight = controls.object.position.y;
-        if (currentHeight > maxAltitudeScore && currentHeight > playerHeight) {
-            maxAltitudeScore = currentHeight;
-            if(scoreElement) scoreElement.textContent = Math.floor(maxAltitudeScore - playerHeight);
-        }
-
-        if (controls.object.position.y < -50) respawnPlayer();
-        if (Math.abs(controls.object.position.x) > MAP_BOUNDARY || Math.abs(controls.object.position.z) > MAP_BOUNDARY) respawnPlayer();
-        if (controls.object.position.y > currentWinHeight) gameWon();
-    }
-    prevTime = time;
-    renderer.render(scene, camera);
 }
