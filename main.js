@@ -42,7 +42,8 @@ let difficultyElement;
 let winBoxMesh;
 const playerHeight = 10.0;
 
-let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, audioLoader;
+// NOVO: Adicionada variável victorySound
+let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, victorySound, audioLoader;
 
 init();
 
@@ -128,6 +129,14 @@ function setupAudio() {
         imminentDangerMusic.setLoop(true);
         imminentDangerMusic.setVolume(0.4);
     }, undefined, (err) => console.log('Aviso: Sem música perigo'));
+
+    // NOVO: Carregamento do som de vitória
+    victorySound = new THREE.Audio(audioListener);
+    audioLoader.load('sounds/vitoria.mp3', function(buffer) {
+        victorySound.setBuffer(buffer);
+        victorySound.setLoop(false); // Toca apenas uma vez
+        victorySound.setVolume(0.6); 
+    }, undefined, (err) => console.log('Aviso: Sem som de vitória (verifique sounds/vitoria.mp3)'));
 }
 
 function setupUI() {
@@ -252,6 +261,7 @@ function generateLevel(maxHeight) {
     for (let yLevel = 10; yLevel < maxHeight; yLevel += 8) {
         
         // AUMENTAMOS AQUI: De 10 a 18 blocos por camada de altura
+        // Isso cria uma "nuvem" densa de blocos para subir
         const blocksInLayer = Math.floor(Math.random() * 8) + 10; 
 
         for (let b = 0; b < blocksInLayer; b++) {
@@ -283,9 +293,6 @@ function generateLevel(maxHeight) {
                 }
 
                 let finalY;
-                // Ajuste de finalY para colocar a base do objeto em rY,
-                // e então o centro Y do objeto será ajustado a partir daí.
-                // Isso é para que a posição seja mais consistente para o Bounding Box.
                 const bboxMinY = geometries[shapeIndex].boundingBox.min.y;
                 const bboxMaxY = geometries[shapeIndex].boundingBox.max.y;
                 const objectHeight = bboxMaxY - bboxMinY;
@@ -464,6 +471,7 @@ function returnToMenu() {
 
     if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
     if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+    if (victorySound && victorySound.isPlaying) victorySound.stop();
 
     respawnPlayer();
     controls.unlock();
@@ -539,6 +547,15 @@ function gameWon() {
     if(scoreElement) scoreElement.textContent = finalScore;
     const elapsedTime = initialGameTime - gameTime;
     saveScore(finalScore, elapsedTime, true);
+    
+    // NOVO: Toca som de vitória
+    if (victorySound && victorySound.buffer) {
+        if (backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (victorySound.isPlaying) victorySound.stop();
+        victorySound.play();
+    }
+
     controls.unlock();
     document.getElementById('gameOverMessage').textContent = 'VOCÊ VENCEU!';
     document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo: ${formatTime(elapsedTime)}`;
