@@ -31,7 +31,7 @@ canvas {
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url('img/minecraftTop.png');
+    background-image: url('/img/minecraftTop.png');
     background-size: 64px;
     background-repeat: repeat;
     opacity: 0;
