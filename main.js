@@ -83,7 +83,7 @@ function init() {
 
     // --- OBJETOS 3D BASE ---
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, playerHeight + 0.1);
-    
+
     // Preparar Materiais e Geometrias
     prepareAssets();
 
@@ -100,7 +100,7 @@ function init() {
     renderer.setAnimationLoop(animate);
     document.body.appendChild(renderer.domElement);
     window.addEventListener('resize', onWindowResize);
-    
+
     updateTimerDisplay();
     document.getElementById('blocker').classList.add('menu-active');
 }
@@ -109,39 +109,39 @@ function setupAudio() {
     audioListener = new THREE.AudioListener();
     camera.add(audioListener);
     audioLoader = new THREE.AudioLoader();
-    
+
     backgroundMusic = new THREE.Audio(audioListener);
-    audioLoader.load('music/background.mp3', function(buffer) {
+    audioLoader.load('./music/background.mp3', function(buffer) {
         backgroundMusic.setBuffer(buffer);
         backgroundMusic.setLoop(true);
         backgroundMusic.setVolume(0.3);
     }, undefined, (err) => console.log('Aviso: Sem música background'));
 
     jumpSound = new THREE.Audio(audioListener);
-    audioLoader.load('sounds/jump.mp3', function(buffer) {
+    audioLoader.load('./sounds/jump.mp3', function(buffer) {
         jumpSound.setBuffer(buffer);
         jumpSound.setVolume(0.5);
     }, undefined, (err) => console.log('Aviso: Sem som jump'));
 
     imminentDangerMusic = new THREE.Audio(audioListener);
-    audioLoader.load('sounds/tempo_esgotando.mp3', function(buffer) {
+    audioLoader.load('./sounds/tempo_esgotando.mp3', function(buffer) {
         imminentDangerMusic.setBuffer(buffer);
         imminentDangerMusic.setLoop(true);
         imminentDangerMusic.setVolume(0.4);
     }, undefined, (err) => console.log('Aviso: Sem música perigo'));
 
     victorySound = new THREE.Audio(audioListener);
-    audioLoader.load('sounds/vitoria.mp3', function(buffer) {
+    audioLoader.load('./sounds/vitoria.mp3', function(buffer) {
         victorySound.setBuffer(buffer);
-        victorySound.setLoop(false); 
-        victorySound.setVolume(0.6); 
+        victorySound.setLoop(false);
+        victorySound.setVolume(0.6);
     }, undefined, (err) => console.log('Aviso: Sem som de vitória'));
 
     defeatSound = new THREE.Audio(audioListener);
-    audioLoader.load('sounds/derrota.mp3', function(buffer) {
+    audioLoader.load('./sounds/derrota.mp3', function(buffer) {
         defeatSound.setBuffer(buffer);
         defeatSound.setLoop(false);
-        defeatSound.setVolume(0.6); 
+        defeatSound.setVolume(0.6);
     }, undefined, (err) => console.log('Aviso: Sem som de derrota'));
 }
 
@@ -161,7 +161,7 @@ function setupUI() {
     });
     document.getElementById('rankingButton').addEventListener('click', (e) => { e.stopPropagation(); showRanking(); });
     document.getElementById('resumeButton').addEventListener('click', () => controls.lock());
-    
+
     const goHomeBtns = document.querySelectorAll('#TelaDeInicioButton, #TelaDeInicioButtonGO');
     goHomeBtns.forEach(btn => btn.addEventListener('click', returnToMenu));
 
@@ -188,9 +188,9 @@ function setPlayerName() {
 
 function prepareAssets() {
     const textureLoader = new THREE.TextureLoader();
-    const sideTexture = textureLoader.load('img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
-    const topTexture = textureLoader.load('img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
-    const bottomTexture = textureLoader.load('img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
+    const sideTexture = textureLoader.load('./img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
+    const topTexture = textureLoader.load('./img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
+    const bottomTexture = textureLoader.load('./img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
 
     const sideMat = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0xbb8866 });
     const topMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x99ff99 });
@@ -198,9 +198,9 @@ function prepareAssets() {
     const boxMaterials = [sideMat, sideMat, topMat, botMat, sideMat, sideMat];
 
     const cylinderMat = [
-        new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }), 
-        new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }),  
-        new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x8888ff }) 
+        new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }),
+        new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }),
+        new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x8888ff })
     ];
     const sphereMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 });
 
@@ -208,13 +208,13 @@ function prepareAssets() {
     const cylinderGeo = new THREE.CylinderGeometry(5, 5, 10, 16);
     const sphereGeo = new THREE.SphereGeometry(6, 16, 16);
 
-    geometries = [boxGeo, boxGeo, boxGeo, cylinderGeo, sphereGeo]; 
+    geometries = [boxGeo, boxGeo, boxGeo, cylinderGeo, sphereGeo];
     materialsList = [boxMaterials, boxMaterials, boxMaterials, cylinderMat, sphereMat];
 }
 
 function createFloor() {
     const textureLoader = new THREE.TextureLoader();
-    const floorTexture = textureLoader.load('img/minecraftTop.png');
+    const floorTexture = textureLoader.load('./img/minecraftTop.png');
     floorTexture.wrapS = THREE.RepeatWrapping;
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(500, 500);
@@ -225,7 +225,7 @@ function createFloor() {
     const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture, color: 0xffffff });
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     scene.add(floor);
-    objects.push(floor); 
+    objects.push(floor);
 }
 
 // --- GERAÇÃO DE NÍVEL (COM ANTICOLISÃO) ---
@@ -239,21 +239,21 @@ function generateLevel(maxHeight) {
             obj.material.dispose();
         }
     }
-    
-    objects.length = 1; 
+
+    objects.length = 1;
     movingObjects.length = 0;
     if (winBoxMesh) scene.remove(winBoxMesh);
 
-    const occupiedBoxes = []; 
+    const occupiedBoxes = [];
     objects[0].geometry.computeBoundingBox();
     const floorBox = new THREE.Box3().setFromObject(objects[0]);
     occupiedBoxes.push(floorBox);
 
     // Plataforma Inicial
     const startPositions = [
-        {x: 0, y: 10, z: -15}, 
-        {x: -10, y: 18, z: -25}, 
-        {x: 10, y: 26, z: -25}   
+        {x: 0, y: 10, z: -15},
+        {x: -10, y: 18, z: -25},
+        {x: 10, y: 26, z: -25}
     ];
 
     startPositions.forEach(pos => {
@@ -266,45 +266,45 @@ function generateLevel(maxHeight) {
     });
 
     // Geração Procedural
-    const gridSize = 12; 
+    const gridSize = 12;
     // Aumentando o loop para gerar mais blocos verticalmente
     for (let yLevel = 10; yLevel < maxHeight; yLevel += 8) {
-        const blocksInLayer = Math.floor(Math.random() * 8) + 10; 
+        const blocksInLayer = Math.floor(Math.random() * 8) + 10;
 
         for (let b = 0; b < blocksInLayer; b++) {
             const shapeIndex = Math.floor(Math.random() * geometries.length);
-            
+
             if (!geometries[shapeIndex].boundingBox) {
                 geometries[shapeIndex].computeBoundingBox();
             }
-            
+
             const mesh = new THREE.Mesh(geometries[shapeIndex], materialsList[shapeIndex]);
 
             let validPosition = false;
             let attempts = 0;
 
             while (!validPosition && attempts < 50) {
-                const rX = Math.floor((Math.random() * 24 - 12)) * gridSize; 
+                const rX = Math.floor((Math.random() * 24 - 12)) * gridSize;
                 const rZ = Math.floor((Math.random() * 24 - 12)) * gridSize;
                 const rY = yLevel + Math.floor(Math.random() * 6 - 3);
 
                 if (rY < 30 && Math.abs(rX) < 20 && Math.abs(rZ) < 20) {
                     attempts++;
-                    continue; 
+                    continue;
                 }
 
                 let finalY;
                 const bboxMinY = geometries[shapeIndex].boundingBox.min.y;
                 const bboxMaxY = geometries[shapeIndex].boundingBox.max.y;
                 const objectHeight = bboxMaxY - bboxMinY;
-                
-                finalY = rY + (objectHeight / 2) - bboxMinY; 
+
+                finalY = rY + (objectHeight / 2) - bboxMinY;
 
                 mesh.position.set(rX, finalY, rZ);
 
                 const newBox = new THREE.Box3().setFromObject(mesh);
                 let intersectsExisting = false;
-                
+
                 for (const existingBox of occupiedBoxes) {
                     if (newBox.intersectsBox(existingBox)) {
                         intersectsExisting = true;
@@ -316,9 +316,9 @@ function generateLevel(maxHeight) {
                     validPosition = true;
                     scene.add(mesh);
                     objects.push(mesh);
-                    occupiedBoxes.push(newBox); 
+                    occupiedBoxes.push(newBox);
 
-                    if (rY > 150 && Math.random() < 0.2) { 
+                    if (rY > 150 && Math.random() < 0.2) {
                         mesh.initialX = rX;
                         movingObjects.push(mesh);
                     }
@@ -339,7 +339,7 @@ function startGameSetup() {
     if (audioListener.context.state === 'suspended') {
         audioListener.context.resume();
     }
-    controls.lock(); 
+    controls.lock();
 }
 
 function onControlsLock() {
@@ -348,7 +348,7 @@ function onControlsLock() {
     document.getElementById('pauseScreen').style.display = 'none';
     document.getElementById('gameOverScreen').style.display = 'none';
     document.getElementById('rankingOverlay').style.display = 'none';
-    
+
     document.getElementById('scoreContainer').style.display = 'block';
     document.getElementById('timerContainer').style.display = 'block';
     document.getElementById('blocker').classList.remove('menu-active');
@@ -424,14 +424,14 @@ function toggleDifficulty() {
     const nextIndex = (difficulties.indexOf(currentDifficulty) + 1) % difficulties.length;
     currentDifficulty = difficulties[nextIndex];
     const settings = difficultySettings[currentDifficulty];
-    
+
     currentWinHeight = settings.height;
     initialGameTime = settings.time;
-    
+
     if (difficultyElement) difficultyElement.textContent = settings.text;
-    
+
     generateLevel(currentWinHeight);
-    
+
     if (!gameActive) respawnPlayer();
 }
 
@@ -474,7 +474,7 @@ function returnToMenu() {
     document.getElementById('rankingOverlay').style.display = 'none';
     document.getElementById('blocker').style.display = 'block';
     document.getElementById('instructions').style.display = 'flex';
-    
+
     document.getElementById('blocker').classList.add('menu-active');
     document.getElementById('scoreContainer').style.display = 'none';
     document.getElementById('timerContainer').style.display = 'none';
@@ -499,7 +499,7 @@ function updateTimer() {
     if (!gameActive || freeMode) { clearInterval(timerInterval); return; }
     gameTime--;
     updateTimerDisplay();
-    
+
     if (gameTime <= 0) {
         gameOver('O tempo acabou e você não concluiu a escalada!');
         if (backgroundMusic) backgroundMusic.stop();
@@ -525,13 +525,13 @@ function gameOver(message) {
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
     if(scoreElement) scoreElement.textContent = finalScore;
     saveScore(finalScore, null, false);
-    
+
     // Toca som de derrota
     if (defeatSound && defeatSound.buffer) {
         if (backgroundMusic.isPlaying) backgroundMusic.stop();
         if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
         if (victorySound && victorySound.isPlaying) victorySound.stop();
-        
+
         if (defeatSound.isPlaying) defeatSound.stop();
         defeatSound.play();
     }
@@ -541,7 +541,7 @@ function gameOver(message) {
     document.getElementById('gameOverScore').textContent = `Pontuação Final: ${finalScore}m`;
     document.getElementById('gameOverScreen').style.display = 'flex';
     // CORREÇÃO: Removido o showRanking() para não sobrepor a mensagem
-    // showRanking(); 
+    // showRanking();
 }
 
 function gameWon() {
@@ -553,7 +553,7 @@ function gameWon() {
     if(scoreElement) scoreElement.textContent = finalScore;
     const elapsedTime = initialGameTime - gameTime;
     saveScore(finalScore, elapsedTime, true);
-    
+
     if (victorySound && victorySound.buffer) {
         if (backgroundMusic.isPlaying) backgroundMusic.stop();
         if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
