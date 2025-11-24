@@ -1,0 +1,21 @@
+{
+  "name": "OnlyUp Minecraft Edition",
+  "short_name": "OnlyUp",
+  "description": "Faça altos parkours",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#D32F2F",
+  "theme_color": "#D32F2F",
+  "icons": [
+    {
+      "src": "/public/img/logo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/public/img/logo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
