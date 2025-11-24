@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 // --- VARIÁVEIS GLOBAIS DE CONTROLE MOBILE ---
 let isMobile = /Mobi|Android/i.test(navigator.userAgent);
@@ -6,12 +7,8 @@ let joystick;
 
 // VARIÁVEIS DE ROTAÇÃO E CÂMERA
 const PI_2 = Math.PI / 2;
-const mouseSensitivity = 0.002; // Sensibilidade do mouse
 
-// VARIÁVEIS DE CONTROLE PC/MOUSE
-let isCursorLocked = false;
-
-let camera, scene, renderer;
+let camera, scene, renderer, controls; // Controls agora será o PointerLockControls
 const objects = [];
 const movingObjects = [];
 let raycaster;
@@ -55,34 +52,12 @@ const playerHeight = 10.0;
 // Variáveis de som
 let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, victorySound, defeatSound, audioLoader;
 
-// --- Objeto controls ---
-const controls = {
-    isLocked: false,
-    object: null,
-    lock: function() {
-        if (!isMobile) isCursorLocked = true;
-        onControlsLock();
-    },
-    unlock: function() {
-        if (!isMobile) isCursorLocked = false;
-        onControlsUnlock();
-    }
-};
-
-// Verificação de segurança do Three.js
-if (typeof THREE === 'undefined') {
-    console.error("THREE.js não carregado.");
-} else {
-    init();
-}
+init();
 
 function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
     camera.position.y = playerHeight;
-
-    // CORREÇÃO CRÍTICA PARA 360: Ordem de rotação YXZ evita travamento nos polos
-    camera.rotation.order = 'YXZ';
-    controls.object = camera;
+    camera.rotation.order = 'YXZ'; // Importante para evitar gimbal lock
 
     scene = new THREE.Scene();
 
@@ -106,13 +81,14 @@ function init() {
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
 
-    // CONTROLES
+    // --- CONTROLES (CORRIGIDO PARA USAR POINTERLOCK) ---
+    controls = new PointerLockControls(camera, document.body);
+
     if (isMobile) {
         setupMobileControls();
     } else {
-        // Usamos mousemove direto para FPS 360 sem lag
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('click', onPCControlsLock);
+        // No PC, usamos os eventos do próprio PointerLockControls
+        // Não precisamos de mousemove manual aqui
     }
 
     setupAudio();
@@ -144,11 +120,12 @@ function startGameSetup() {
     if (audioListener.context.state === 'suspended') {
         audioListener.context.resume();
     }
+    // Trava o mouse (inicia o controle 360)
     controls.lock();
 }
 
 // =========================================================================
-// FUNÇÕES DE CONTROLE (CORREÇÃO 360 GRAUS AQUI)
+// CONTROLE MOBILE (JOYSTICK + TOUCH)
 // =========================================================================
 
 function setupMobileControls() {
@@ -175,9 +152,10 @@ function setupMobileControls() {
         moveForward = moveBackward = moveLeft = moveRight = false;
     });
 
+    // Touch para olhar (apenas mobile)
     const lookContainer = document.getElementById('lookContainer');
     let lastX = 0, lastY = 0;
-    const sensibility = 0.5;
+    const sensibility = 0.005; // Sensibilidade do toque
 
     lookContainer.addEventListener('touchstart', (event) => {
         if (!gameActive) return;
@@ -193,43 +171,18 @@ function setupMobileControls() {
         const deltaX = touch.pageX - lastX;
         const deltaY = touch.pageY - lastY;
 
-        // Aplicação direta na rotação para garantir 360 igual ao PC
-        camera.rotation.y -= deltaX * sensibility * mouseSensitivity * 10;
-        camera.rotation.x -= deltaY * sensibility * mouseSensitivity * 10;
-        camera.rotation.x = Math.max( - PI_2, Math.min( PI_2, camera.rotation.x ) );
+        // Aplica rotação diretamente na câmera (fallback para mobile)
+        camera.rotation.y -= deltaX * sensibility;
+        camera.rotation.x -= deltaY * sensibility;
+        camera.rotation.x = Math.max(-PI_2, Math.min(PI_2, camera.rotation.x));
 
         lastX = touch.pageX;
         lastY = touch.pageY;
     }, { passive: false });
 }
 
-function onPCControlsLock() {
-    if (!gameActive || isMobile) return;
-    const blocker = document.getElementById('blocker');
-    if (blocker.style.display !== 'none') {
-        controls.lock();
-    }
-}
-
-function onMouseMove(event) {
-    if (!gameActive || isMobile || !isCursorLocked) return;
-
-    // --- CORREÇÃO FPS 360 GRAUS ---
-    // Aplicamos diretamente na câmera. Subtrair movementX gira o corpo (Y).
-    // Subtrair movementY gira a cabeça (X).
-
-    const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
-    const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
-
-    camera.rotation.y -= movementX * mouseSensitivity;
-    camera.rotation.x -= movementY * mouseSensitivity;
-
-    // Trava vertical para não dar cambalhota (padrão FPS)
-    camera.rotation.x = Math.max( - PI_2, Math.min( PI_2, camera.rotation.x ) );
-}
-
 // =========================================================================
-// LÓGICA DO JOGO (MANTIDA INTEGRALMENTE)
+// LÓGICA DE ÁUDIO E UI
 // =========================================================================
 
 function setupAudio() {
@@ -238,47 +191,44 @@ function setupAudio() {
     audioLoader = new THREE.AudioLoader();
 
     backgroundMusic = new THREE.Audio(audioListener);
-    audioLoader.load('/music/background.mp3', function(buffer) {
+    audioLoader.load('music/background.mp3', function(buffer) {
         backgroundMusic.setBuffer(buffer);
         backgroundMusic.setLoop(true);
         backgroundMusic.setVolume(0.3);
-    }, undefined, (err) => console.log('Aviso: Sem música background'));
+    }, undefined, () => console.log('Aviso: Sem música background'));
 
     jumpSound = new THREE.Audio(audioListener);
-    audioLoader.load('/sounds/jump.mp3', function(buffer) {
+    audioLoader.load('sounds/jump.mp3', function(buffer) {
         jumpSound.setBuffer(buffer);
         jumpSound.setVolume(0.5);
-    }, undefined, (err) => console.log('Aviso: Sem som jump'));
+    }, undefined, () => console.log('Aviso: Sem som jump'));
 
     imminentDangerMusic = new THREE.Audio(audioListener);
-    audioLoader.load('/sounds/tempo_esgotando.mp3', function(buffer) {
+    audioLoader.load('sounds/tempo_esgotando.mp3', function(buffer) {
         imminentDangerMusic.setBuffer(buffer);
         imminentDangerMusic.setLoop(true);
         imminentDangerMusic.setVolume(0.4);
-    }, undefined, (err) => console.log('Aviso: Sem música perigo'));
+    }, undefined, () => console.log('Aviso: Sem música perigo'));
 
     victorySound = new THREE.Audio(audioListener);
-    audioLoader.load('/sounds/vitoria.mp3', function(buffer) {
+    audioLoader.load('sounds/vitoria.mp3', function(buffer) {
         victorySound.setBuffer(buffer);
         victorySound.setLoop(false);
         victorySound.setVolume(0.6);
-    }, undefined, (err) => console.log('Aviso: Sem som de vitória'));
+    }, undefined, () => console.log('Aviso: Sem som de vitória'));
 
     defeatSound = new THREE.Audio(audioListener);
-    audioLoader.load('/sounds/derrota.mp3', function(buffer) {
+    audioLoader.load('sounds/derrota.mp3', function(buffer) {
         defeatSound.setBuffer(buffer);
         defeatSound.setLoop(false);
         defeatSound.setVolume(0.6);
-    }, undefined, (err) => console.log('Aviso: Sem som de derrota'));
+    }, undefined, () => console.log('Aviso: Sem som de derrota'));
 }
 
 function setupUI() {
-    const scoreEl = document.getElementById('scoreValue');
-    const timerEl = document.getElementById('timerValue');
-    const diffEl = document.getElementById('difficultyText');
-    if (scoreEl) scoreElement = scoreEl;
-    if (timerEl) timerElement = timerEl;
-    if (diffEl) difficultyElement = diffEl;
+    scoreElement = document.getElementById('scoreValue');
+    timerElement = document.getElementById('timerValue');
+    difficultyElement = document.getElementById('difficultyText');
 
     document.getElementById('playButton').addEventListener('click', () => {
         setPlayerName();
@@ -305,12 +255,9 @@ function setupUI() {
     });
     document.getElementById('DificultButton').addEventListener('click', toggleDifficulty);
 
-    // Tecla ESC para destravar
-    document.addEventListener('keydown', (event) => {
-        if (event.code === 'Escape' && controls.isLocked) {
-            controls.unlock();
-        }
-    });
+    // Listeners do PointerLockControls
+    controls.addEventListener('lock', onControlsLock);
+    controls.addEventListener('unlock', onControlsUnlock);
 
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
@@ -335,7 +282,6 @@ function toggleGameHUD(show) {
 
     if (crosshair) crosshair.style.display = (!isMobile && show) ? display : 'none';
     if (mobileControls) mobileControls.style.display = (isMobile && show) ? 'block' : 'none';
-    document.body.style.cursor = (!isMobile && show) ? 'none' : 'default';
 }
 
 function onControlsLock() {
@@ -357,7 +303,6 @@ function onControlsLock() {
     } else if (!gameActive) {
         startGame();
     }
-    controls.isLocked = true;
 }
 
 function onControlsUnlock() {
@@ -378,7 +323,6 @@ function onControlsUnlock() {
             document.getElementById('timerContainer').style.display = 'none';
         }
     }
-    controls.isLocked = false;
 }
 
 function onKeyDown(event) {
@@ -415,10 +359,12 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    if(gameActive) toggleGameHUD(true);
+    if (gameActive) toggleGameHUD(true);
 }
 
 function respawnPlayer() {
+    // Reseta posição e velocidade
+    camera.position.set(0, playerHeight, 0);
     controls.object.position.set(0, playerHeight, 0);
     velocity.set(0, 0, 0);
     jumpCount = 0;
@@ -478,6 +424,7 @@ function returnToMenu() {
     document.getElementById('rankingOverlay').style.display = 'none';
     document.getElementById('blocker').style.display = 'block';
     document.getElementById('instructions').style.display = 'flex';
+
     document.getElementById('blocker').classList.add('menu-active');
     document.getElementById('scoreContainer').style.display = 'none';
     document.getElementById('timerContainer').style.display = 'none';
@@ -526,12 +473,12 @@ function gameOver(message) {
     isPaused = false;
     clearInterval(timerInterval);
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
-    if(scoreElement) scoreElement.textContent = finalScore;
+    if (scoreElement) scoreElement.textContent = finalScore;
     saveScore(finalScore, null, false);
 
     if (defeatSound && defeatSound.buffer) {
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
         if (victorySound && victorySound.isPlaying) victorySound.stop();
         if (defeatSound.isPlaying) defeatSound.stop();
         defeatSound.play();
@@ -551,13 +498,13 @@ function gameWon() {
     clearInterval(timerInterval);
     maxAltitudeScore = controls.object.position.y;
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
-    if(scoreElement) scoreElement.textContent = finalScore;
+    if (scoreElement) scoreElement.textContent = finalScore;
     const elapsedTime = initialGameTime - gameTime;
     saveScore(finalScore, elapsedTime, true);
 
     if (victorySound && victorySound.buffer) {
-        if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
-        if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
         if (victorySound.isPlaying) victorySound.stop();
         victorySound.play();
     }
@@ -619,14 +566,150 @@ function resetRanking() {
     showRanking();
 }
 
+// --- ASSETS E GERAÇÃO (MANTIDOS) ---
+
+function prepareAssets() {
+    const textureLoader = new THREE.TextureLoader();
+    const sideTexture = textureLoader.load('img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
+    const topTexture = textureLoader.load('img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
+    const bottomTexture = textureLoader.load('img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
+
+    const sideMat = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0xbb8866 });
+    const topMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x99ff99 });
+    const botMat = new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x996644 });
+    const boxMaterials = [sideMat, sideMat, topMat, botMat, sideMat, sideMat];
+
+    const cylinderMat = [
+        new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }),
+        new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }),
+        new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x8888ff })
+    ];
+    const sphereMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 });
+
+    const boxGeo = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
+    const cylinderGeo = new THREE.CylinderGeometry(5, 5, 10, 16);
+    const sphereGeo = new THREE.SphereGeometry(6, 16, 16);
+
+    geometries = [boxGeo, boxGeo, boxGeo, cylinderGeo, sphereGeo];
+    materialsList = [boxMaterials, boxMaterials, boxMaterials, cylinderMat, sphereMat];
+}
+
+function createFloor() {
+    const textureLoader = new THREE.TextureLoader();
+    const floorTexture = textureLoader.load('img/minecraftTop.png');
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(500, 500);
+    floorTexture.magFilter = THREE.NearestFilter;
+
+    let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
+    floorGeometry.rotateX(-Math.PI / 2);
+    const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture, color: 0xffffff });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    scene.add(floor);
+    objects.push(floor);
+}
+
+function generateLevel(maxHeight) {
+    for (let i = objects.length - 1; i > 0; i--) {
+        const obj = objects[i];
+        scene.remove(obj);
+        if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => m.dispose());
+        } else {
+            obj.material.dispose();
+        }
+    }
+
+    objects.length = 1;
+    movingObjects.length = 0;
+    if (winBoxMesh) scene.remove(winBoxMesh);
+
+    const occupiedBoxes = [];
+    if (objects[0] && objects[0].geometry) {
+        if (!objects[0].geometry.boundingBox) objects[0].geometry.computeBoundingBox();
+        const floorBox = new THREE.Box3().setFromObject(objects[0]);
+        occupiedBoxes.push(floorBox);
+    }
+
+    const startPositions = [
+        { x: 0, y: 10, z: -15 },
+        { x: -10, y: 18, z: -25 },
+        { x: 10, y: 26, z: -25 }
+    ];
+
+    startPositions.forEach(pos => {
+        const mesh = new THREE.Mesh(geometries[0], materialsList[0]);
+        mesh.position.set(pos.x, pos.y, pos.z);
+        scene.add(mesh);
+        objects.push(mesh);
+        const box = new THREE.Box3().setFromObject(mesh);
+        occupiedBoxes.push(box);
+    });
+
+    const numBlocks = Math.floor(maxHeight / 1.5);
+    let createdBlocks = 0;
+    let attempts = 0;
+    const maxAttempts = numBlocks * 100;
+
+    while (createdBlocks < numBlocks && attempts < maxAttempts) {
+        attempts++;
+        const shapeIndex = Math.floor(Math.random() * geometries.length);
+        const mesh = new THREE.Mesh(geometries[shapeIndex], materialsList[shapeIndex]);
+
+        const rX = Math.floor(Math.random() * 30 - 15) * 12;
+        const rZ = Math.floor(Math.random() * 30 - 15) * 12;
+        const rY = Math.floor(Math.random() * (maxHeight - 30)) + 30;
+
+        if (!geometries[shapeIndex].boundingBox) geometries[shapeIndex].computeBoundingBox();
+        const bboxMinY = geometries[shapeIndex].boundingBox.min.y;
+        const bboxMaxY = geometries[shapeIndex].boundingBox.max.y;
+        const height = bboxMaxY - bboxMinY;
+        const finalY = rY + (height / 2) - bboxMinY;
+
+        mesh.position.set(rX, finalY, rZ);
+
+        const isMoving = (rY > 150 && Math.random() < 0.3);
+        const newBox = new THREE.Box3().setFromObject(mesh);
+
+        if (isMoving) {
+            newBox.expandByVector(new THREE.Vector3(30, 2, 2));
+        } else {
+            newBox.expandByScalar(-0.5);
+        }
+
+        let collision = false;
+        for (const existingBox of occupiedBoxes) {
+            if (newBox.intersectsBox(existingBox)) {
+                collision = true;
+                break;
+            }
+        }
+
+        if (!collision) {
+            scene.add(mesh);
+            objects.push(mesh);
+            occupiedBoxes.push(newBox);
+            if (isMoving) {
+                mesh.initialX = rX;
+                movingObjects.push(mesh);
+            }
+            createdBlocks++;
+        }
+    }
+
+    const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
+    const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
+    winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
+    winBoxMesh.position.set(0, maxHeight + 2.5, 0);
+    scene.add(winBoxMesh);
+}
+
 function animate() {
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
 
     if (controls.isLocked === true && gameActive) {
-        // Nota: A rotação da câmera agora é feita no onMouseMove (PC) ou touchmove (Mobile)
-        // para garantir resposta 1:1 e 360 graus.
-
         const currentTime = time * 0.001;
         for (const obj of movingObjects) {
             const oldX = obj.position.x;
@@ -657,187 +740,26 @@ function animate() {
             }
         }
 
-        // --- MOVIMENTO (TECLADO/JOYSTICK) ---
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
         direction.normalize();
+        if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+        if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
 
-        const ACCELERATION = 400.0 * delta;
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        controls.object.position.y += (velocity.y * delta);
 
-        if (moveForward || moveBackward) {
-            velocity.z += direction.z * ACCELERATION;
-        }
-        if (moveLeft || moveRight) {
-            velocity.x += direction.x * ACCELERATION;
-        }
-
-        // ATENÇÃO: O vetor de movimento deve usar APENAS a rotação Y (Horizontal)
-        // para que ao olhar para cima/baixo o jogador não ande mais devagar ou voe.
-        const forwardVector = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, camera.rotation.y, 0, 'YXZ'));
-        const rightVector = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, camera.rotation.y, 0, 'YXZ'));
-
-        camera.position.addScaledVector(forwardVector, velocity.z * delta);
-        camera.position.addScaledVector(rightVector, velocity.x * delta);
-
-        camera.position.y += (velocity.y * delta);
-
-        const currentHeight = camera.position.y;
+        const currentHeight = controls.object.position.y;
         if (currentHeight > maxAltitudeScore && currentHeight > playerHeight) {
             maxAltitudeScore = currentHeight;
-            if(scoreElement) scoreElement.textContent = Math.floor(maxAltitudeScore - playerHeight);
+            if (scoreElement) scoreElement.textContent = Math.floor(maxAltitudeScore - playerHeight);
         }
 
-        if (camera.position.y < -50) respawnPlayer();
-        if (Math.abs(camera.position.x) > MAP_BOUNDARY || Math.abs(camera.position.z) > MAP_BOUNDARY) respawnPlayer();
-        if (camera.position.y > currentWinHeight) gameWon();
+        if (controls.object.position.y < -50) respawnPlayer();
+        if (Math.abs(controls.object.position.x) > MAP_BOUNDARY || Math.abs(controls.object.position.z) > MAP_BOUNDARY) respawnPlayer();
+        if (controls.object.position.y > currentWinHeight) gameWon();
     }
     prevTime = time;
     renderer.render(scene, camera);
-}
-
-function prepareAssets() {
-    const textureLoader = new THREE.TextureLoader();
-    const sideTexture = textureLoader.load('/img/minecraftTextureBlock.png'); sideTexture.magFilter = THREE.NearestFilter;
-    const topTexture = textureLoader.load('/img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
-    const bottomTexture = textureLoader.load('/img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
-
-    const sideMat = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0xbb8866 });
-    const topMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x99ff99 });
-    const botMat = new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x996644 });
-    const boxMaterials = [sideMat, sideMat, topMat, botMat, sideMat, sideMat];
-
-    const cylinderMat = [
-        new THREE.MeshBasicMaterial({ map: sideTexture, color: 0x8888ff }),
-        new THREE.MeshBasicMaterial({ map: topTexture, color: 0x8888ff }),
-        new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x8888ff })
-    ];
-    const sphereMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 });
-
-    const boxGeo = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
-    const cylinderGeo = new THREE.CylinderGeometry(5, 5, 10, 16);
-    const sphereGeo = new THREE.SphereGeometry(6, 16, 16);
-
-    geometries = [boxGeo, boxGeo, boxGeo, cylinderGeo, sphereGeo];
-    materialsList = [boxMaterials, boxMaterials, boxMaterials, cylinderMat, sphereMat];
-}
-
-function createFloor() {
-    const textureLoader = new THREE.TextureLoader();
-    const floorTexture = textureLoader.load('/img/minecraftTop.png');
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(500, 500);
-    floorTexture.magFilter = THREE.NearestFilter;
-
-    let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
-    floorGeometry.rotateX(-Math.PI / 2);
-    const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture, color: 0xffffff });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    scene.add(floor);
-    objects.push(floor);
-}
-
-function generateLevel(maxHeight) {
-    for (let i = objects.length - 1; i > 0; i--) {
-        const obj = objects[i];
-        scene.remove(obj);
-        if (Array.isArray(obj.material)) {
-            obj.material.forEach(m => m.dispose());
-        } else {
-            obj.material.dispose();
-        }
-    }
-
-    objects.length = 1;
-    movingObjects.length = 0;
-    if (winBoxMesh) scene.remove(winBoxMesh);
-
-    const occupiedBoxes = [];
-    objects[0].geometry.computeBoundingBox();
-    const floorBox = new THREE.Box3().setFromObject(objects[0]);
-    occupiedBoxes.push(floorBox);
-
-    // Plataforma Inicial
-    const startPositions = [
-        {x: 0, y: 10, z: -15},
-        {x: -10, y: 18, z: -25},
-        {x: 10, y: 26, z: -25}
-    ];
-
-    startPositions.forEach(pos => {
-        const mesh = new THREE.Mesh(geometries[0], materialsList[0]);
-        mesh.position.set(pos.x, pos.y, pos.z);
-        scene.add(mesh);
-        objects.push(mesh);
-        const box = new THREE.Box3().setFromObject(mesh);
-        occupiedBoxes.push(box);
-    });
-
-    // Geração Procedural
-    const gridSize = 12;
-    for (let yLevel = 10; yLevel < maxHeight; yLevel += 8) {
-        const blocksInLayer = Math.floor(Math.random() * 8) + 10;
-
-        for (let b = 0; b < blocksInLayer; b++) {
-            const shapeIndex = Math.floor(Math.random() * geometries.length);
-
-            if (!geometries[shapeIndex].boundingBox) {
-                geometries[shapeIndex].computeBoundingBox();
-            }
-
-            const mesh = new THREE.Mesh(geometries[shapeIndex], materialsList[shapeIndex]);
-
-            let validPosition = false;
-            let attempts = 0;
-
-            while (!validPosition && attempts < 50) {
-                const rX = Math.floor((Math.random() * 24 - 12)) * gridSize;
-                const rZ = Math.floor((Math.random() * 24 - 12)) * gridSize;
-                const rY = yLevel + Math.floor(Math.random() * 6 - 3);
-
-                if (rY < 30 && Math.abs(rX) < 20 && Math.abs(rZ) < 20) {
-                    attempts++;
-                    continue;
-                }
-
-                let finalY;
-                const bboxMinY = geometries[shapeIndex].boundingBox.min.y;
-                const bboxMaxY = geometries[shapeIndex].boundingBox.max.y;
-                const objectHeight = bboxMaxY - bboxMinY;
-
-                finalY = rY + (objectHeight / 2) - bboxMinY;
-
-                mesh.position.set(rX, finalY, rZ);
-
-                const newBox = new THREE.Box3().setFromObject(mesh);
-                let intersectsExisting = false;
-
-                for (const existingBox of occupiedBoxes) {
-                    if (newBox.intersectsBox(existingBox)) {
-                        intersectsExisting = true;
-                        break;
-                    }
-                }
-
-                if (!intersectsExisting) {
-                    validPosition = true;
-                    scene.add(mesh);
-                    objects.push(mesh);
-                    occupiedBoxes.push(newBox);
-
-                    if (rY > 150 && Math.random() < 0.2) {
-                        mesh.initialX = rX;
-                        movingObjects.push(mesh);
-                    }
-                }
-                attempts++;
-            }
-        }
-    }
-
-    const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
-    const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
-    winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
-    winBoxMesh.position.set(0, maxHeight + 2.5, 0);
-    scene.add(winBoxMesh);
 }
