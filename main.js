@@ -8,7 +8,7 @@ let joystick;
 // VARIÁVEIS DE ROTAÇÃO E CÂMERA
 const PI_2 = Math.PI / 2;
 
-let camera, scene, renderer, controls; // Controls agora será o PointerLockControls
+let camera, scene, renderer, controls; 
 const objects = [];
 const movingObjects = [];
 let raycaster;
@@ -21,7 +21,7 @@ let materialsList = [];
 
 let currentDifficulty = 'EASY';
 const difficultySettings = {
-    EASY: { time: 300, height: 300, text: 'FÁCIL' },
+    EASY: { time: 350, height: 300, text: 'FÁCIL' },
     NORMAL: { time: 300, height: 500, text: 'NORMAL' },
     HARD: { time: 240, height: 600, text: 'DIFÍCIL' }
 };
@@ -57,7 +57,7 @@ init();
 function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
     camera.position.y = playerHeight;
-    camera.rotation.order = 'YXZ'; // Importante para evitar gimbal lock
+    camera.rotation.order = 'YXZ'; 
 
     scene = new THREE.Scene();
 
@@ -81,14 +81,11 @@ function init() {
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
 
-    // --- CONTROLES (CORRIGIDO PARA USAR POINTERLOCK) ---
+    // --- CONTROLES ---
     controls = new PointerLockControls(camera, document.body);
 
     if (isMobile) {
         setupMobileControls();
-    } else {
-        // No PC, usamos os eventos do próprio PointerLockControls
-        // Não precisamos de mousemove manual aqui
     }
 
     setupAudio();
@@ -120,12 +117,11 @@ function startGameSetup() {
     if (audioListener.context.state === 'suspended') {
         audioListener.context.resume();
     }
-    // Trava o mouse (inicia o controle 360)
     controls.lock();
 }
 
 // =========================================================================
-// CONTROLE MOBILE (JOYSTICK + TOUCH)
+// CONTROLE MOBILE
 // =========================================================================
 
 function setupMobileControls() {
@@ -152,10 +148,9 @@ function setupMobileControls() {
         moveForward = moveBackward = moveLeft = moveRight = false;
     });
 
-    // Touch para olhar (apenas mobile)
     const lookContainer = document.getElementById('lookContainer');
     let lastX = 0, lastY = 0;
-    const sensibility = 0.005; // Sensibilidade do toque
+    const sensibility = 0.005; 
 
     lookContainer.addEventListener('touchstart', (event) => {
         if (!gameActive) return;
@@ -171,7 +166,6 @@ function setupMobileControls() {
         const deltaX = touch.pageX - lastX;
         const deltaY = touch.pageY - lastY;
 
-        // Aplica rotação diretamente na câmera (fallback para mobile)
         camera.rotation.y -= deltaX * sensibility;
         camera.rotation.x -= deltaY * sensibility;
         camera.rotation.x = Math.max(-PI_2, Math.min(PI_2, camera.rotation.x));
@@ -182,7 +176,7 @@ function setupMobileControls() {
 }
 
 // =========================================================================
-// LÓGICA DE ÁUDIO E UI
+// LÓGICA DO JOGO
 // =========================================================================
 
 function setupAudio() {
@@ -231,14 +225,10 @@ function setupUI() {
     difficultyElement = document.getElementById('difficultyText');
 
     document.getElementById('playButton').addEventListener('click', () => {
-        setPlayerName();
-        freeMode = false;
-        startGameSetup();
+        setPlayerName(); freeMode = false; startGameSetup();
     });
     document.getElementById('playButtonFree').addEventListener('click', () => {
-        setPlayerName();
-        freeMode = true;
-        startGameSetup();
+        setPlayerName(); freeMode = true; startGameSetup();
     });
     document.getElementById('rankingButton').addEventListener('click', (e) => { e.stopPropagation(); showRanking(); });
     document.getElementById('resumeButton').addEventListener('click', () => controls.lock());
@@ -363,7 +353,6 @@ function onWindowResize() {
 }
 
 function respawnPlayer() {
-    // Reseta posição e velocidade
     camera.position.set(0, playerHeight, 0);
     controls.object.position.set(0, playerHeight, 0);
     velocity.set(0, 0, 0);
@@ -566,7 +555,7 @@ function resetRanking() {
     showRanking();
 }
 
-// --- ASSETS E GERAÇÃO (MANTIDOS) ---
+// --- ASSETS E GERAÇÃO ---
 
 function prepareAssets() {
     const textureLoader = new THREE.TextureLoader();
@@ -610,7 +599,9 @@ function createFloor() {
     objects.push(floor);
 }
 
+// --- GERAÇÃO DE NÍVEL (VOLTA AO PADRÃO ORIGINAL / ALTA DENSIDADE) ---
 function generateLevel(maxHeight) {
+    // Limpeza
     for (let i = objects.length - 1; i > 0; i--) {
         const obj = objects[i];
         scene.remove(obj);
@@ -647,7 +638,10 @@ function generateLevel(maxHeight) {
         occupiedBoxes.push(box);
     });
 
-    const numBlocks = Math.floor(maxHeight / 1.5);
+    // LÓGICA RESTAURADA PARA ALTA QUANTIDADE DE BLOCOS
+    // Usa maxHeight * 2.2 para calcular a quantidade, garantindo densidade alta.
+    const numBlocks = Math.floor(maxHeight * 2.2);
+    
     let createdBlocks = 0;
     let attempts = 0;
     const maxAttempts = numBlocks * 100;
@@ -657,6 +651,7 @@ function generateLevel(maxHeight) {
         const shapeIndex = Math.floor(Math.random() * geometries.length);
         const mesh = new THREE.Mesh(geometries[shapeIndex], materialsList[shapeIndex]);
 
+        // Espalhamento "Nuvem" (largo)
         const rX = Math.floor(Math.random() * 30 - 15) * 12;
         const rZ = Math.floor(Math.random() * 30 - 15) * 12;
         const rY = Math.floor(Math.random() * (maxHeight - 30)) + 30;
@@ -669,6 +664,7 @@ function generateLevel(maxHeight) {
 
         mesh.position.set(rX, finalY, rZ);
 
+        // Anticolisão
         const isMoving = (rY > 150 && Math.random() < 0.3);
         const newBox = new THREE.Box3().setFromObject(mesh);
 
@@ -679,8 +675,9 @@ function generateLevel(maxHeight) {
         }
 
         let collision = false;
-        for (const existingBox of occupiedBoxes) {
-            if (newBox.intersectsBox(existingBox)) {
+        // Verifica de trás pra frente (otimização leve)
+        for (let i = occupiedBoxes.length - 1; i >= 0; i--) {
+             if (newBox.intersectsBox(occupiedBoxes[i])) {
                 collision = true;
                 break;
             }

@@ -334,9 +334,8 @@ button:hover#creditsBtn {
     z-index: 52;
 }
 
-/* ======================================================= */
 /* MEDIA QUERIES PARA RESPONSIVIDADE */
-/* ======================================================= */
+
 
 @media (max-width: 768px) {
     .game-title {
