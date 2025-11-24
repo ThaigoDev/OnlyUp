@@ -42,8 +42,8 @@ let difficultyElement;
 let winBoxMesh;
 const playerHeight = 10.0;
 
-// NOVO: Adicionada variável victorySound
-let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, victorySound, audioLoader;
+// Variáveis de som
+let audioListener, backgroundMusic, jumpSound, imminentDangerMusic, victorySound, defeatSound, audioLoader;
 
 init();
 
@@ -84,7 +84,7 @@ function init() {
     // --- OBJETOS 3D BASE ---
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, playerHeight + 0.1);
     
-    // Preparar Materiais e Geometrias (para usar no generateLevel)
+    // Preparar Materiais e Geometrias
     prepareAssets();
 
     // Criar o Chão
@@ -130,13 +130,19 @@ function setupAudio() {
         imminentDangerMusic.setVolume(0.4);
     }, undefined, (err) => console.log('Aviso: Sem música perigo'));
 
-    // NOVO: Carregamento do som de vitória
     victorySound = new THREE.Audio(audioListener);
     audioLoader.load('sounds/vitoria.mp3', function(buffer) {
         victorySound.setBuffer(buffer);
-        victorySound.setLoop(false); // Toca apenas uma vez
+        victorySound.setLoop(false); 
         victorySound.setVolume(0.6); 
-    }, undefined, (err) => console.log('Aviso: Sem som de vitória (verifique sounds/vitoria.mp3)'));
+    }, undefined, (err) => console.log('Aviso: Sem som de vitória'));
+
+    defeatSound = new THREE.Audio(audioListener);
+    audioLoader.load('sounds/derrota.mp3', function(buffer) {
+        defeatSound.setBuffer(buffer);
+        defeatSound.setLoop(false);
+        defeatSound.setVolume(0.6); 
+    }, undefined, (err) => console.log('Aviso: Sem som de derrota'));
 }
 
 function setupUI() {
@@ -168,11 +174,9 @@ function setupUI() {
     });
     document.getElementById('DificultButton').addEventListener('click', toggleDifficulty);
 
-    // Controls Events
     controls.addEventListener('lock', onControlsLock);
     controls.addEventListener('unlock', onControlsUnlock);
 
-    // Keyboard
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
 }
@@ -188,7 +192,6 @@ function prepareAssets() {
     const topTexture = textureLoader.load('img/minecraftTop.png'); topTexture.magFilter = THREE.NearestFilter;
     const bottomTexture = textureLoader.load('img/minecraftBot.png'); bottomTexture.magFilter = THREE.NearestFilter;
 
-    // Materiais
     const sideMat = new THREE.MeshBasicMaterial({ map: sideTexture, color: 0xbb8866 });
     const topMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0x99ff99 });
     const botMat = new THREE.MeshBasicMaterial({ map: bottomTexture, color: 0x996644 });
@@ -201,12 +204,10 @@ function prepareAssets() {
     ];
     const sphereMat = new THREE.MeshBasicMaterial({ map: topTexture, color: 0xff8888 });
 
-    // Geometrias
     const boxGeo = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
     const cylinderGeo = new THREE.CylinderGeometry(5, 5, 10, 16);
     const sphereGeo = new THREE.SphereGeometry(6, 16, 16);
 
-    // Preencher arrays globais
     geometries = [boxGeo, boxGeo, boxGeo, cylinderGeo, sphereGeo]; 
     materialsList = [boxMaterials, boxMaterials, boxMaterials, cylinderMat, sphereMat];
 }
@@ -224,12 +225,11 @@ function createFloor() {
     const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture, color: 0xffffff });
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     scene.add(floor);
-    objects.push(floor); // Adiciona à colisão
+    objects.push(floor); 
 }
 
-// --- NOVA FUNÇÃO DE GERAÇÃO DE NÍVEL (CORRIGIDA: MAIOR DENSIDADE) ---
+// --- GERAÇÃO DE NÍVEL (COM ANTICOLISÃO) ---
 function generateLevel(maxHeight) {
-    // 1. Limpar blocos antigos
     for (let i = objects.length - 1; i > 0; i--) {
         const obj = objects[i];
         scene.remove(obj);
@@ -240,34 +240,40 @@ function generateLevel(maxHeight) {
         }
     }
     
-    objects.length = 1; // Mantém só o chão
+    objects.length = 1; 
     movingObjects.length = 0;
     if (winBoxMesh) scene.remove(winBoxMesh);
 
-    // ... (código anterior de limpeza)
-
-    // 2. Gerar novos blocos com Grid e ALTA DENSIDADE
-    const occupiedBoxes = []; // Usaremos Bounding Boxes para checagem de colisão
-    
-    // Pegar o BoundingBox do Chão (objects[0]) para evitar colisão inicial
+    const occupiedBoxes = []; 
     objects[0].geometry.computeBoundingBox();
     const floorBox = new THREE.Box3().setFromObject(objects[0]);
     occupiedBoxes.push(floorBox);
 
-    // Diminui o gridSize para 12 (blocos tem tam 10), assim ficam mais perto sem encostar
-    const gridSize = 12; 
+    // Plataforma Inicial
+    const startPositions = [
+        {x: 0, y: 10, z: -15}, 
+        {x: -10, y: 18, z: -25}, 
+        {x: 10, y: 26, z: -25}   
+    ];
 
-    // Loop vertical a cada 8 unidades
+    startPositions.forEach(pos => {
+        const mesh = new THREE.Mesh(geometries[0], materialsList[0]);
+        mesh.position.set(pos.x, pos.y, pos.z);
+        scene.add(mesh);
+        objects.push(mesh);
+        const box = new THREE.Box3().setFromObject(mesh);
+        occupiedBoxes.push(box);
+    });
+
+    // Geração Procedural
+    const gridSize = 12; 
+    // Aumentando o loop para gerar mais blocos verticalmente
     for (let yLevel = 10; yLevel < maxHeight; yLevel += 8) {
-        
-        // AUMENTAMOS AQUI: De 10 a 18 blocos por camada de altura
-        // Isso cria uma "nuvem" densa de blocos para subir
         const blocksInLayer = Math.floor(Math.random() * 8) + 10; 
 
         for (let b = 0; b < blocksInLayer; b++) {
             const shapeIndex = Math.floor(Math.random() * geometries.length);
             
-            // **NOVO: Garante que a geometria tem BoundingBox calculado**
             if (!geometries[shapeIndex].boundingBox) {
                 geometries[shapeIndex].computeBoundingBox();
             }
@@ -277,16 +283,11 @@ function generateLevel(maxHeight) {
             let validPosition = false;
             let attempts = 0;
 
-            // Mais tentativas para encontrar vaga
             while (!validPosition && attempts < 50) {
-                // Gera numa grade horizontal mais controlada (-12 a +12 na grade)
                 const rX = Math.floor((Math.random() * 24 - 12)) * gridSize; 
                 const rZ = Math.floor((Math.random() * 24 - 12)) * gridSize;
-                
-                // Pequena variação vertical
                 const rY = yLevel + Math.floor(Math.random() * 6 - 3);
 
-                // Regra: Não spawna perto do spawn inicial (0,0,0) até 30m de altura
                 if (rY < 30 && Math.abs(rX) < 20 && Math.abs(rZ) < 20) {
                     attempts++;
                     continue; 
@@ -297,17 +298,13 @@ function generateLevel(maxHeight) {
                 const bboxMaxY = geometries[shapeIndex].boundingBox.max.y;
                 const objectHeight = bboxMaxY - bboxMinY;
                 
-                // finalY é a posição Y do centro do objeto
                 finalY = rY + (objectHeight / 2) - bboxMinY; 
 
                 mesh.position.set(rX, finalY, rZ);
 
-                // PASSO 1: Calcular Bounding Box do Novo Bloco
                 const newBox = new THREE.Box3().setFromObject(mesh);
-                
                 let intersectsExisting = false;
                 
-                // PASSO 2: Verificar Intersecção com Blocos Existentes
                 for (const existingBox of occupiedBoxes) {
                     if (newBox.intersectsBox(existingBox)) {
                         intersectsExisting = true;
@@ -317,14 +314,10 @@ function generateLevel(maxHeight) {
 
                 if (!intersectsExisting) {
                     validPosition = true;
-
                     scene.add(mesh);
                     objects.push(mesh);
-                    
-                    // PASSO 3: Adicionar o Bounding Box do novo bloco à lista de ocupados
                     occupiedBoxes.push(newBox); 
 
-                    // Movimento em blocos altos
                     if (rY > 150 && Math.random() < 0.2) { 
                         mesh.initialX = rX;
                         movingObjects.push(mesh);
@@ -335,7 +328,6 @@ function generateLevel(maxHeight) {
         }
     }
 
-    // 3. Criar Bloco de Vitória
     const victoryGeometry = new THREE.BoxGeometry(200, 5, 200);
     const victoryMaterial = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.5 });
     winBoxMesh = new THREE.Mesh(victoryGeometry, victoryMaterial);
@@ -472,6 +464,7 @@ function returnToMenu() {
     if (backgroundMusic && backgroundMusic.isPlaying) backgroundMusic.stop();
     if (imminentDangerMusic && imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
     if (victorySound && victorySound.isPlaying) victorySound.stop();
+    if (defeatSound && defeatSound.isPlaying) defeatSound.stop();
 
     respawnPlayer();
     controls.unlock();
@@ -506,8 +499,9 @@ function updateTimer() {
     if (!gameActive || freeMode) { clearInterval(timerInterval); return; }
     gameTime--;
     updateTimerDisplay();
+    
     if (gameTime <= 0) {
-        gameOver('Tempo Esgotado!');
+        gameOver('O tempo acabou e você não concluiu a escalada!');
         if (backgroundMusic) backgroundMusic.stop();
         if (imminentDangerMusic) imminentDangerMusic.stop();
         return;
@@ -531,11 +525,23 @@ function gameOver(message) {
     finalScore = Math.floor(maxAltitudeScore - playerHeight);
     if(scoreElement) scoreElement.textContent = finalScore;
     saveScore(finalScore, null, false);
+    
+    // Toca som de derrota
+    if (defeatSound && defeatSound.buffer) {
+        if (backgroundMusic.isPlaying) backgroundMusic.stop();
+        if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
+        if (victorySound && victorySound.isPlaying) victorySound.stop();
+        
+        if (defeatSound.isPlaying) defeatSound.stop();
+        defeatSound.play();
+    }
+
     controls.unlock();
     document.getElementById('gameOverMessage').textContent = message;
     document.getElementById('gameOverScore').textContent = `Pontuação Final: ${finalScore}m`;
     document.getElementById('gameOverScreen').style.display = 'flex';
-    showRanking();
+    // CORREÇÃO: Removido o showRanking() para não sobrepor a mensagem
+    // showRanking(); 
 }
 
 function gameWon() {
@@ -548,7 +554,6 @@ function gameWon() {
     const elapsedTime = initialGameTime - gameTime;
     saveScore(finalScore, elapsedTime, true);
     
-    // NOVO: Toca som de vitória
     if (victorySound && victorySound.buffer) {
         if (backgroundMusic.isPlaying) backgroundMusic.stop();
         if (imminentDangerMusic.isPlaying) imminentDangerMusic.stop();
@@ -560,7 +565,7 @@ function gameWon() {
     document.getElementById('gameOverMessage').textContent = 'VOCÊ VENCEU!';
     document.getElementById('gameOverScore').textContent = `Pontuação: ${finalScore}m | Tempo: ${formatTime(elapsedTime)}`;
     document.getElementById('gameOverScreen').style.display = 'flex';
-    showRanking();
+    // CORREÇÃO: Removido o showRanking()
 }
 
 function formatTime(totalSeconds) {
